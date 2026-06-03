@@ -91,7 +91,7 @@ export default function ChatBot() {
             onChange={(e) => setMessage(e.target.value)}
             disabled={isLoading}
           />
-          <button type="submit" disabled={isLoading}>➤</button>
+          <button type="submit" disabled={isLoading}>🚀</button>
         </form>
       </div>
     </div>

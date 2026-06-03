@@ -3,6 +3,28 @@ import './index.css'
 import DAXConsole from './DAXConsole'
 import ChatBot from './ChatBot'
 
+// ─── Intro Video Component ──────────────────────────────────────
+function IntroVideo({ onComplete }) {
+  const videoRef = useRef(null);
+
+  return (
+    <div className="intro-container">
+      <video 
+        ref={videoRef}
+        autoPlay 
+        className="intro-video"
+        onEnded={onComplete}
+      >
+        <source src="/intro_video.mp4" type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      <button className="skip-btn" onClick={onComplete}>
+        Skip Intro
+      </button>
+    </div>
+  );
+}
+
 const API_BASE = 'http://localhost:8000'
 const WS_BASE = 'ws://localhost:8000'
 
@@ -27,18 +49,18 @@ const SENSOR_UNITS = {
 // ─── Sidebar Component ──────────────────────────────────────────
 function Sidebar({ activePage, setActivePage, isConnected }) {
   const navItems = [
-    { id: 'dashboard', icon: '📊', label: 'Dashboard' },
-    { id: 'engine', icon: '🔧', label: 'Engine Diagram' },
-    { id: 'history', icon: '📋', label: 'History' },
-    { id: 'dax', icon: '⚡', label: 'DAX Console' },
-    { id: 'digital-twin', icon: '🌐', label: 'Digital Twin' },
+    { id: 'dashboard', icon: '', label: 'Dashboard' },
+    { id: 'engine', icon: '', label: 'Engine Diagram' },
+    { id: 'history', icon: '', label: 'History' },
+    { id: 'dax', icon: '', label: 'DAX Console' },
+    { id: 'digital-twin', icon: '', label: 'Digital Twin' },
   ]
 
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">🔍</div>
+          <div className="sidebar-logo-icon">L</div>
           <div>
             <h1>LeakSense Twin</h1>
             <span>Cat C18 Engine Diagnostics</span>
@@ -79,7 +101,7 @@ function GoNoGoIndicator({ status }) {
     <div className={`card go-nogo-card ${isGo ? 'go-indicator' : 'nogo-indicator'}`}>
       <div className="card-header">
         <span className="card-title">Status</span>
-        <span className="card-icon">{isGo ? '✅' : '🚨'}</span>
+        <span className="card-icon"></span>
       </div>
       <div className={`go-nogo-status ${isGo ? 'go' : 'nogo'}`}>
         {status}
@@ -100,13 +122,13 @@ function ConfidenceRing({ confidence, leakDetected }) {
 
   let color = 'var(--accent-emerald)'
   if (confidence > 0.7) color = 'var(--accent-red)'
-  else if (confidence > 0.4) color = 'var(--accent-amber)'
+  else if (confidence > 0.4) color = 'var(--accent-yellow)'
 
   return (
     <div className="card confidence-card">
       <div className="card-header">
         <span className="card-title">Confidence</span>
-        <span className="card-icon">🎯</span>
+        <span className="card-icon"></span>
       </div>
       <div className="confidence-ring">
         <svg viewBox="0 0 128 128">
@@ -139,7 +161,7 @@ function LeakAlertCard({ data }) {
     <div className="card alert-card">
       <div className="card-header">
         <span className="card-title">Leak Analysis</span>
-        <span className="card-icon">⚡</span>
+        <span className="card-icon"></span>
       </div>
       <div className="alert-content">
         <div className="alert-zone">{data.suspected_zone || ZONE_NAMES[0]}</div>
@@ -168,7 +190,7 @@ function SensorGrid({ sensors }) {
     <div className="card sensors-card">
       <div className="card-header">
         <span className="card-title">Live Sensors</span>
-        <span className="card-icon">📡</span>
+        <span className="card-icon"></span>
       </div>
       <div className="sensor-grid">
         {entries.map(([key, val]) => (
@@ -197,9 +219,9 @@ function EnergyFieldHeatmap({ efData }) {
       const b = Math.round(50 * (1 - v))
       return `rgb(${r}, ${g}, ${b})`
     } else {
-      const r = Math.round(50 * (1 + v))
-      const g = Math.round(100 * (1 + v))
-      const b = Math.round(255 * (-v))
+      const r = Math.round(252 * (1 + v))
+      const g = Math.round(212 * (1 + v))
+      const b = Math.round(65 * (1 + v))
       return `rgb(${r}, ${g}, ${b})`
     }
   }
@@ -208,7 +230,7 @@ function EnergyFieldHeatmap({ efData }) {
     <div className="card heatmap-card">
       <div className="card-header">
         <span className="card-title">Energy Field</span>
-        <span className="card-icon">🌡️</span>
+        <span className="card-icon"></span>
       </div>
       <div className="heatmap-container">
         {matrix.map((row, i) => (
@@ -266,15 +288,15 @@ function ResidualsCard({ residuals }) {
   const getBarColor = (val) => {
     const abs = Math.abs(val)
     if (abs > 20) return 'var(--accent-red)'
-    if (abs > 10) return 'var(--accent-amber)'
-    return 'var(--accent-cyan)'
+    if (abs > 10) return 'var(--accent-yellow)'
+    return 'var(--accent-yellow)'
   }
 
   return (
     <div className="card residuals-card">
       <div className="card-header">
         <span className="card-title">Digital Twin Residuals</span>
-        <span className="card-icon">🔬</span>
+        <span className="card-icon"></span>
       </div>
       <div className="residuals-grid">
         {entries.map(([key, val]) => (
@@ -303,15 +325,15 @@ function ResidualsCard({ residuals }) {
 function ZoneProbabilities({ probs }) {
   const probArray = probs || [1, 0, 0, 0, 0, 0]
   const colors = [
-    'var(--accent-emerald)', 'var(--accent-cyan)', 'var(--accent-blue)',
-    'var(--accent-purple)', 'var(--accent-amber)', 'var(--accent-red)'
+    'var(--accent-emerald)', 'var(--accent-yellow)', 'var(--accent-yellow)',
+    'var(--accent-yellow)', 'var(--accent-yellow)', 'var(--accent-red)'
   ]
 
   return (
     <div className="card zone-probs-card">
       <div className="card-header">
         <span className="card-title">Zone Probabilities</span>
-        <span className="card-icon">📊</span>
+        <span className="card-icon"></span>
       </div>
       <div className="zone-bars">
         {ZONE_NAMES.map((name, i) => (
@@ -350,7 +372,7 @@ function EngineDiagram({ zoneIdx, leakDetected, onZoneClick }) {
     <div className="card engine-card">
       <div className="card-header">
         <span className="card-title">Cat C18 Engine — Zone Map (Click to Simulate)</span>
-        <span className="card-icon">🔧</span>
+        <span className="card-icon"></span>
       </div>
       <div className="engine-diagram">
         {zones.map((zone, idx) => (
@@ -377,7 +399,7 @@ function HistoryTable({ history }) {
     <div className="card history-card">
       <div className="card-header">
         <span className="card-title">Prediction History</span>
-        <span className="card-icon">📋</span>
+        <span className="card-icon"></span>
       </div>
       <table className="history-table">
         <thead>
@@ -441,7 +463,7 @@ function InteractiveLevelMeters({ sensors, setSensors, onSensorChange }) {
     <div className="card level-meters-card" style={{ gridColumn: 'span 2' }}>
       <div className="card-header">
         <span className="card-title">Live Sensor Overrides</span>
-        <span className="card-icon">🎚️</span>
+        <span className="card-icon"></span>
       </div>
       <div className="level-meters-container">
         {configs.map(c => {
@@ -459,7 +481,7 @@ function InteractiveLevelMeters({ sensors, setSensors, onSensorChange }) {
                 min={c.min} max={c.max} step={c.step}
                 value={val}
                 onChange={e => handleChange(c.key, e.target.value)}
-                style={{ background: `linear-gradient(to right, var(--accent-cyan) ${pct}%, var(--bg-glass) ${pct}%)` }}
+                style={{ background: `linear-gradient(to right, var(--accent-yellow) ${pct}%, var(--bg-glass) ${pct}%)` }}
               />
             </div>
           )
@@ -485,7 +507,7 @@ function EnergyFieldGraph({ efData }) {
     <div className="card" style={{ gridColumn: 'span 2' }}>
       <div className="card-header">
         <span className="card-title">Energy Field Deviation</span>
-        <span className="card-icon">📈</span>
+        <span className="card-icon"></span>
       </div>
       <div className="ef-graph-container">
         {values.map((v, i) => (
@@ -500,6 +522,7 @@ function EnergyFieldGraph({ efData }) {
 
 // ─── Main App ────────────────────────────────────────────────────
 function App() {
+  const [showIntro, setShowIntro] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
   const [predictionData, setPredictionData] = useState(null)
   const [history, setHistory] = useState([])
@@ -532,15 +555,32 @@ function App() {
     }, 100);
   };
 
-  const handleZoneClick = (zoneId) => {
-    let sensors = { RPM: 1800, MAF: 850, MAP_boost: 215, T_cac_out: 45, T_exh_manifold: 550, dP_dpf: 0.5, fuel_qty: 120 };
-    if (zoneId === 1) { sensors.MAF = 650; sensors.MAP_boost = 180; sensors.T_cac_out = 47; }
-    else if (zoneId === 2) { sensors.MAP_boost = 160; sensors.T_cac_out = 55; }
-    else if (zoneId === 3) { sensors.MAP_boost = 150; sensors.T_exh_manifold = 620; sensors.T_cac_out = 52; }
-    else if (zoneId === 4) { sensors.T_exh_manifold = 420; sensors.MAP_boost = 190; }
-    else if (zoneId === 5) { sensors.dP_dpf = 0.1; sensors.T_exh_manifold = 580; }
-    setManualSensors(sensors);
-    handleManualSensorChange(sensors);
+  const handleZoneClick = async (zoneId) => {
+    // We use the simulation API to ensure the sensor values perfectly match 
+    // the physics patterns the ML model was trained on for this specific zone.
+    try {
+      const res = await fetch(`${API_BASE}/api/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rpm: 1800,
+          leak_zone: zoneId,
+          leak_severity: 2, // Medium leak (8% flow loss) for stable detection
+        }),
+      })
+      const data = await res.json()
+      
+      // Update UI with the simulation result
+      setPredictionData(data)
+      if (data.sensors) {
+        setManualSensors(data.sensors)
+      }
+      setHistory(prev => [...prev.slice(-100), data])
+      
+      console.log(`Simulated leak in Zone ${zoneId}:`, data.suspected_zone);
+    } catch (err) {
+      console.error('Zone click simulation error:', err)
+    }
   };
 
   // Fetch history on load
@@ -644,17 +684,19 @@ function App() {
   }
 
   return (
-    <div className="app-container">
+    <>
+      {showIntro && <IntroVideo onComplete={() => setShowIntro(false)} />}
+      <div className="app-container">
       <Sidebar activePage={activePage} setActivePage={setActivePage} isConnected={isConnected} />
 
       <main className="main-content">
         <div className="main-header">
           <h2>
-            {activePage === 'dashboard' && '📊 Real-Time Dashboard'}
-            {activePage === 'engine' && '🔧 Engine Diagram'}
-            {activePage === 'history' && '📋 Detection History'}
-            {activePage === 'dax' && '⚡ DAX Engine Query Console'}
-            {activePage === 'digital-twin' && '🌐 Digital Twin'}
+            {activePage === 'dashboard' && 'Real-Time Dashboard'}
+            {activePage === 'engine' && 'Engine Diagram'}
+            {activePage === 'history' && 'Detection History'}
+            {activePage === 'dax' && 'DAX Engine Query Console'}
+            {activePage === 'digital-twin' && 'Digital Twin'}
           </h2>
           <div className="header-controls">
             <span className={`header-badge ${isConnected ? 'badge-connected' : 'badge-disconnected'}`}>
@@ -675,7 +717,7 @@ function App() {
               className={`demo-btn ${isDemoRunning ? 'active' : ''}`}
               onClick={isDemoRunning ? stopDemo : startDemo}
             >
-              {isDemoRunning ? '⏹ Stop Demo' : '▶ Start Live Demo'}
+              {isDemoRunning ? 'Stop Demo' : 'Start Live Demo'}
             </button>
 
             <select className="demo-select" value={simZone} onChange={e => setSimZone(Number(e.target.value))}>
@@ -695,7 +737,7 @@ function App() {
             </select>
 
             <button id="simulate-btn" className="demo-btn danger" onClick={runSimulation}>
-              🧪 Inject & Predict
+              Inject & Predict
             </button>
           </div>
         </div>
@@ -763,6 +805,7 @@ function App() {
       </main>
       <ChatBot />
     </div>
+    </>
   )
 }
 

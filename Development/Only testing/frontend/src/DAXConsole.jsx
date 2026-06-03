@@ -45,7 +45,7 @@ export default function DAXConsole() {
     <div className="card" style={{ gridColumn: '1 / -1', minHeight: '600px' }}>
       <div className="card-header">
         <span className="card-title">DAX Query Console</span>
-        <span className="card-icon">⚡</span>
+        <span className="card-icon"></span>
       </div>
       <div style={{ padding: '20px' }}>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
@@ -74,9 +74,9 @@ export default function DAXConsole() {
         
         <div style={{ marginTop: '15px', display: 'flex', gap: '10px' }}>
           <button className="demo-btn active" onClick={() => runQuery()} disabled={loading}>
-            {loading ? 'Running...' : '▶ RUN Ctrl+Enter'}
+            {loading ? 'Running...' : 'RUN Ctrl+Enter'}
           </button>
-          <button className="demo-btn" onClick={() => setQuery('')}>◻ CLEAR</button>
+          <button className="demo-btn" onClick={() => setQuery('')}>CLEAR</button>
         </div>
 
         {error && <div style={{ color: 'var(--accent-red)', marginTop: '20px' }}>Error: {error}</div>}
@@ -84,7 +84,7 @@ export default function DAXConsole() {
         {result && (
           <div style={{ marginTop: '20px' }}>
             {result.is_scalar ? (
-              <div style={{ fontSize: '48px', color: 'var(--accent-amber)', fontFamily: 'Orbitron, sans-serif' }}>
+              <div style={{ fontSize: '48px', color: 'var(--accent-yellow)', fontFamily: 'Orbitron, sans-serif' }}>
                 {result.scalar_value !== null ? result.scalar_value.toFixed(2) : 'No result'}
               </div>
             ) : (
