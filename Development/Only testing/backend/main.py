@@ -34,6 +34,24 @@ from ml.models import LeakSenseNet, LeakLocalizationNet
 from ml.ensemble import LeakSenseEnsemble
 from ml.energy_field import EnergyFieldDetector
 
+
+def _to_json_safe(obj):
+    """Recursively convert numpy/torch types to plain Python so FastAPI
+    can serialize them without crashing on numpy.int64 etc."""
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(v) for v in obj]
+    if isinstance(obj, np.integer):
+        return int(obj)
+    if isinstance(obj, np.floating):
+        return float(obj)
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -350,6 +368,7 @@ class UnifiedPredictor:
         }
 
         # Store in history
+        result = _to_json_safe(result)  # ensure all numpy types are converted
         prediction_history.append(result)
         if len(prediction_history) > MAX_HISTORY:
             prediction_history.pop(0)
@@ -457,7 +476,10 @@ async def websocket_live(ws: WebSocket):
         while True:
             data = await ws.receive_json()
             result = predictor.predict(data)
-            await ws.send_json(result)
+            try:
+                await ws.send_json(result)
+            except Exception as send_err:
+                print(f"  WebSocket send error: {send_err}")
     except WebSocketDisconnect:
         print("  WebSocket client disconnected")
     except Exception as e:
@@ -494,11 +516,14 @@ async def websocket_demo(ws: WebSocket):
 
             result = predictor.predict(sample)
             result['demo_info'] = {
-                'cycle': cycle,
-                'injected_zone': zone,
-                'injected_severity': severity,
+                'cycle': int(cycle),
+                'injected_zone': int(zone),
+                'injected_severity': int(severity),
             }
-            await ws.send_json(result)
+            try:
+                await ws.send_json(result)
+            except Exception as send_err:
+                print(f"  Demo send error (skipping frame): {send_err}")
             await asyncio.sleep(1.0)
 
     except WebSocketDisconnect:

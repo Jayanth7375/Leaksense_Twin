@@ -9,9 +9,9 @@ function IntroVideo({ onComplete }) {
 
   return (
     <div className="intro-container">
-      <video 
+      <video
         ref={videoRef}
-        autoPlay 
+        autoPlay
         className="intro-video"
         onEnded={onComplete}
       >
@@ -50,7 +50,7 @@ const SENSOR_UNITS = {
 function Sidebar({ activePage, setActivePage, isConnected }) {
   const navItems = [
     { id: 'dashboard', icon: '', label: 'Dashboard' },
-    { id: 'engine', icon: '', label: 'Engine Diagram' },
+    { id: 'engine', icon: '', label: 'Analysis' },
     { id: 'history', icon: '', label: 'History' },
     { id: 'dax', icon: '', label: 'DAX Console' },
     { id: 'digital-twin', icon: '', label: 'Digital Twin' },
@@ -423,11 +423,10 @@ function HistoryTable({ history }) {
               <td>{(item.confidence * 100).toFixed(1)}%</td>
               <td>{item.suspected_zone?.split('—')[0]?.trim() || '-'}</td>
               <td>
-                <span className={`alert-severity ${
-                  item.severity === 'CRITICAL' ? 'severity-critical' :
-                  item.severity === 'MEDIUM' ? 'severity-medium' :
-                  item.severity === 'SMALL' ? 'severity-small' : 'severity-none'
-                }`}>{item.severity || 'NONE'}</span>
+                <span className={`alert-severity ${item.severity === 'CRITICAL' ? 'severity-critical' :
+                    item.severity === 'MEDIUM' ? 'severity-medium' :
+                      item.severity === 'SMALL' ? 'severity-small' : 'severity-none'
+                  }`}>{item.severity || 'NONE'}</span>
               </td>
               <td style={{ color: item.go_no_go === 'GO' ? 'var(--accent-emerald)' : 'var(--accent-red)', fontWeight: 700 }}>
                 {item.go_no_go}
@@ -475,8 +474,8 @@ function InteractiveLevelMeters({ sensors, setSensors, onSensorChange }) {
                 <span>{c.label}</span>
                 <span>{val}</span>
               </div>
-              <input 
-                type="range" 
+              <input
+                type="range"
                 className="level-meter-input"
                 min={c.min} max={c.max} step={c.step}
                 value={val}
@@ -495,7 +494,7 @@ function InteractiveLevelMeters({ sensors, setSensors, onSensorChange }) {
 function EnergyFieldGraph({ efData }) {
   const matrix = efData?.matrix || Array(6).fill(Array(6).fill(0));
   const channels = ['MAF', 'Boost', 'CAC Out', 'Exhaust', 'DPF', 'RPM'];
-  
+
   const values = matrix.map(row => {
     if (Array.isArray(row)) {
       return row.reduce((a, b) => a + Math.abs(b), 0) / (row.length || 1);
@@ -512,7 +511,7 @@ function EnergyFieldGraph({ efData }) {
       <div className="ef-graph-container">
         {values.map((v, i) => (
           <div key={i} className="ef-graph-bar" style={{ height: `${Math.min(100, Math.max(5, v * 100))}%` }}>
-            <div className="ef-graph-label">{channels[i] || `CH${i+1}`}</div>
+            <div className="ef-graph-label">{channels[i] || `CH${i + 1}`}</div>
           </div>
         ))}
       </div>
@@ -569,14 +568,14 @@ function App() {
         }),
       })
       const data = await res.json()
-      
+
       // Update UI with the simulation result
       setPredictionData(data)
       if (data.sensors) {
         setManualSensors(data.sensors)
       }
       setHistory(prev => [...prev.slice(-100), data])
-      
+
       console.log(`Simulated leak in Zone ${zoneId}:`, data.suspected_zone);
     } catch (err) {
       console.error('Zone click simulation error:', err)
@@ -590,7 +589,7 @@ function App() {
       .then(data => {
         if (Array.isArray(data)) setHistory(data)
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   // Demo WebSocket
@@ -607,7 +606,7 @@ function App() {
       const data = JSON.parse(e.data)
       setPredictionData(data)
       setHistory(prev => [...prev.slice(-100), data])
-      
+
       if (data.sensors) {
         setManualSensors({
           RPM: data.sensors.RPM || 1800,
@@ -687,124 +686,124 @@ function App() {
     <>
       {showIntro && <IntroVideo onComplete={() => setShowIntro(false)} />}
       <div className="app-container">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} isConnected={isConnected} />
+        <Sidebar activePage={activePage} setActivePage={setActivePage} isConnected={isConnected} />
 
-      <main className="main-content">
-        <div className="main-header">
-          <h2>
-            {activePage === 'dashboard' && 'Real-Time Dashboard'}
-            {activePage === 'engine' && 'Engine Diagram'}
-            {activePage === 'history' && 'Detection History'}
-            {activePage === 'dax' && 'DAX Engine Query Console'}
-            {activePage === 'digital-twin' && 'Digital Twin'}
-          </h2>
-          <div className="header-controls">
-            <span className={`header-badge ${isConnected ? 'badge-connected' : 'badge-disconnected'}`}>
-              <span className="status-dot" style={{
-                background: isConnected ? 'var(--accent-emerald)' : 'var(--accent-red)',
-                width: '6px', height: '6px'
-              }}></span>
-              {isConnected ? 'LIVE' : 'OFFLINE'}
-            </span>
+        <main className="main-content">
+          <div className="main-header">
+            <h2>
+              {activePage === 'dashboard' && 'Real-Time Dashboard'}
+              {activePage === 'engine' && 'Analysis'}
+              {activePage === 'history' && 'Detection History'}
+              {activePage === 'dax' && 'DAX Engine Query Console'}
+              {activePage === 'digital-twin' && 'Digital Twin'}
+            </h2>
+            <div className="header-controls">
+              <span className={`header-badge ${isConnected ? 'badge-connected' : 'badge-disconnected'}`}>
+                <span className="status-dot" style={{
+                  background: isConnected ? 'var(--accent-emerald)' : 'var(--accent-red)',
+                  width: '6px', height: '6px'
+                }}></span>
+                {isConnected ? 'LIVE' : 'OFFLINE'}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Demo Controls — always visible */}
-        <div className="dashboard-grid" style={{ marginBottom: '20px' }}>
-          <div className="demo-controls">
-            <button
-              id="demo-toggle"
-              className={`demo-btn ${isDemoRunning ? 'active' : ''}`}
-              onClick={isDemoRunning ? stopDemo : startDemo}
-            >
-              {isDemoRunning ? 'Stop Demo' : 'Start Live Demo'}
-            </button>
+          {/* Demo Controls — always visible */}
+          <div className="dashboard-grid" style={{ marginBottom: '20px' }}>
+            <div className="demo-controls">
+              <button
+                id="demo-toggle"
+                className={`demo-btn ${isDemoRunning ? 'active' : ''}`}
+                onClick={isDemoRunning ? stopDemo : startDemo}
+              >
+                {isDemoRunning ? 'Stop Demo' : 'Start Live Demo'}
+              </button>
 
-            <select className="demo-select" value={simZone} onChange={e => setSimZone(Number(e.target.value))}>
-              <option value={0}>Healthy (No Leak)</option>
-              <option value={1}>Zone 1 — Intake</option>
-              <option value={2}>Zone 2 — Charge Air</option>
-              <option value={3}>Zone 3 — CAC/Manifold</option>
-              <option value={4}>Zone 4 — Exhaust</option>
-              <option value={5}>Zone 5 — DPF/SCR</option>
-            </select>
+              <select className="demo-select" value={simZone} onChange={e => setSimZone(Number(e.target.value))}>
+                <option value={0}>Healthy (No Leak)</option>
+                <option value={1}>Zone 1 — Intake</option>
+                <option value={2}>Zone 2 — Charge Air</option>
+                <option value={3}>Zone 3 — CAC/Manifold</option>
+                <option value={4}>Zone 4 — Exhaust</option>
+                <option value={5}>Zone 5 — DPF/SCR</option>
+              </select>
 
-            <select className="demo-select" value={simSeverity} onChange={e => setSimSeverity(Number(e.target.value))}>
-              <option value={0}>No Fault</option>
-              <option value={1}>Small (2%)</option>
-              <option value={2}>Medium (8%)</option>
-              <option value={3}>Large (15%)</option>
-            </select>
+              <select className="demo-select" value={simSeverity} onChange={e => setSimSeverity(Number(e.target.value))}>
+                <option value={0}>No Fault</option>
+                <option value={1}>Small (2%)</option>
+                <option value={2}>Medium (8%)</option>
+                <option value={3}>Large (15%)</option>
+              </select>
 
-            <button id="simulate-btn" className="demo-btn danger" onClick={runSimulation}>
-              Inject & Predict
-            </button>
+              <button id="simulate-btn" className="demo-btn danger" onClick={runSimulation}>
+                Inject & Predict
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Dashboard Page */}
-        {activePage === 'dashboard' && (
-          <div className="dashboard-grid">
-            <GoNoGoIndicator status={data.go_no_go} />
-            <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
-            <LeakAlertCard data={data} />
+          {/* Dashboard Page */}
+          {activePage === 'dashboard' && (
+            <div className="dashboard-grid">
+              <GoNoGoIndicator status={data.go_no_go} />
+              <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
+              <LeakAlertCard data={data} />
 
-            <SensorGrid sensors={data.sensors} />
-            <EnergyFieldHeatmap efData={data.energy_field} />
+              <SensorGrid sensors={data.sensors} />
+              <EnergyFieldHeatmap efData={data.energy_field} />
 
-            <ResidualsCard residuals={data.residuals} />
-            <ZoneProbabilities probs={data.zone_probabilities} />
-          </div>
-        )}
+              <ResidualsCard residuals={data.residuals} />
+              <ZoneProbabilities probs={data.zone_probabilities} />
+            </div>
+          )}
 
-        {/* Engine Diagram Page */}
-        {activePage === 'engine' && (
-          <div className="dashboard-grid">
-            <InteractiveLevelMeters 
-              sensors={manualSensors} 
-              setSensors={setManualSensors} 
-              onSensorChange={handleManualSensorChange} 
-            />
-            <EnergyFieldGraph efData={data.energy_field} />
-            <EngineDiagram 
-              zoneIdx={data.suspected_zone_idx} 
-              leakDetected={data.leak_detected} 
-              onZoneClick={handleZoneClick}
-            />
-            <GoNoGoIndicator status={data.go_no_go} />
-            <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
-            <LeakAlertCard data={data} />
-            <ZoneProbabilities probs={data.zone_probabilities} />
-          </div>
-        )}
+          {/* Engine Diagram Page */}
+          {activePage === 'engine' && (
+            <div className="dashboard-grid">
+              <InteractiveLevelMeters
+                sensors={manualSensors}
+                setSensors={setManualSensors}
+                onSensorChange={handleManualSensorChange}
+              />
+              <EnergyFieldGraph efData={data.energy_field} />
+              <EngineDiagram
+                zoneIdx={data.suspected_zone_idx}
+                leakDetected={data.leak_detected}
+                onZoneClick={handleZoneClick}
+              />
+              <GoNoGoIndicator status={data.go_no_go} />
+              <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
+              <LeakAlertCard data={data} />
+              <ZoneProbabilities probs={data.zone_probabilities} />
+            </div>
+          )}
 
-        {/* History Page */}
-        {activePage === 'history' && (
-          <div className="dashboard-grid">
-            <HistoryTable history={history} />
-          </div>
-        )}
+          {/* History Page */}
+          {activePage === 'history' && (
+            <div className="dashboard-grid">
+              <HistoryTable history={history} />
+            </div>
+          )}
 
-        {/* DAX Console Page */}
-        {activePage === 'dax' && (
-          <div className="dashboard-grid">
-            <DAXConsole />
-          </div>
-        )}
+          {/* DAX Console Page */}
+          {activePage === 'dax' && (
+            <div className="dashboard-grid">
+              <DAXConsole />
+            </div>
+          )}
 
-        {/* Digital Twin Page */}
-        {activePage === 'digital-twin' && (
-          <div className="dashboard-grid" style={{ height: '80vh', padding: '0', gridTemplateColumns: '1fr' }}>
-            <iframe 
-              src="/LeakSense_v5_Fixed.html" 
-              style={{ width: '100%', height: '100%', minHeight: '800px', border: 'none', borderRadius: '12px' }}
-              title="Digital Twin"
-            />
-          </div>
-        )}
-      </main>
-      <ChatBot />
-    </div>
+          {/* Digital Twin Page */}
+          {activePage === 'digital-twin' && (
+            <div className="dashboard-grid" style={{ height: '80vh', padding: '0', gridTemplateColumns: '1fr' }}>
+              <iframe
+                src="/LeakSense_v5_Fixed.html"
+                style={{ width: '100%', height: '100%', minHeight: '800px', border: 'none', borderRadius: '12px' }}
+                title="Digital Twin"
+              />
+            </div>
+          )}
+        </main>
+        <ChatBot />
+      </div>
     </>
   )
 }

@@ -50,7 +50,7 @@ const SENSOR_UNITS = {
 function Sidebar({ activePage, setActivePage, isConnected }) {
   const navItems = [
     { id: 'dashboard', icon: '', label: 'Dashboard' },
-    { id: 'engine', icon: '', label: 'Engine Diagram' },
+    { id: 'engine', icon: '', label: 'Analysis' },
     { id: 'history', icon: '', label: 'History' },
     { id: 'dax', icon: '', label: 'DAX Console' },
     { id: 'digital-twin', icon: '', label: 'Digital Twin' },
@@ -693,7 +693,7 @@ function App() {
         <div className="main-header">
           <h2>
             {activePage === 'dashboard' && 'Real-Time Dashboard'}
-            {activePage === 'engine' && 'Engine Diagram'}
+            {activePage === 'engine' && 'Analysis'}
             {activePage === 'history' && 'Detection History'}
             {activePage === 'dax' && 'DAX Engine Query Console'}
             {activePage === 'digital-twin' && 'Digital Twin'}

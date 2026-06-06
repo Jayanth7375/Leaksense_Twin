@@ -18,11 +18,14 @@
   /* Accent colors - CAT Yellow & Secondary */
   --accent-yellow: #fcd441;
   --accent-yellow-glow: rgba(252, 212, 65, 0.3);
-  --accent-cyan: #fcd441; /* Map legacy cyan to CAT Yellow */
+  --accent-cyan: #fcd441;
+  /* Map legacy cyan to CAT Yellow */
   --accent-cyan-glow: rgba(252, 212, 65, 0.3);
-  --accent-blue: #e5b800; /* Darker yellow */
+  --accent-blue: #e5b800;
+  /* Darker yellow */
   --accent-purple: #fcd441;
-  --accent-emerald: #10b981; /* Keep status colors but maybe adjust? No, keep status standard. */
+  --accent-emerald: #10b981;
+  /* Keep status colors but maybe adjust? No, keep status standard. */
   --accent-amber: #fcd441;
   --accent-red: #ef4444;
   --accent-red-glow: rgba(239, 68, 68, 0.3);
@@ -56,13 +59,16 @@
   /* Layout */
   --sidebar-width: 260px;
   --header-height: 64px;
-  --border-radius: 8px; /* Slightly sharper industrial edges */
+  --border-radius: 8px;
+  /* Slightly sharper industrial edges */
   --border-radius-sm: 4px;
   --border-radius-lg: 12px;
 }
 
 /* ── Reset ─────────────────────────────────────────────────────── */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -713,7 +719,7 @@ body {
   padding-left: 6px;
   font-size: 0.65rem;
   font-family: var(--font-mono);
-  color: rgba(255,255,255,0.9);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
 }
 
@@ -893,23 +899,51 @@ body {
 
 /* ── Animations ────────────────────────────────────────────────── */
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 @keyframes alertPulse {
-  0%, 100% { box-shadow: var(--shadow-card); }
-  50% { box-shadow: var(--shadow-card), var(--shadow-glow-red); }
+
+  0%,
+  100% {
+    box-shadow: var(--shadow-card);
+  }
+
+  50% {
+    box-shadow: var(--shadow-card), var(--shadow-glow-red);
+  }
 }
 
 @keyframes textPulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .card {
@@ -919,18 +953,22 @@ body {
 /* ── Loading Skeleton ──────────────────────────────────────────── */
 .skeleton {
   background: linear-gradient(90deg,
-    var(--bg-glass) 25%,
-    rgba(255,255,255,0.06) 50%,
-    var(--bg-glass) 75%
-  );
+      var(--bg-glass) 25%,
+      rgba(255, 255, 255, 0.06) 50%,
+      var(--bg-glass) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: var(--border-radius-sm);
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ── Responsive ────────────────────────────────────────────────── */
@@ -938,6 +976,7 @@ body {
   .dashboard-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
   .engine-card,
   .history-card,
   .demo-controls {
@@ -949,16 +988,20 @@ body {
   .sidebar {
     transform: translateX(-100%);
   }
+
   .main-content {
     margin-left: 0;
     padding: 16px;
   }
+
   .dashboard-grid {
     grid-template-columns: 1fr;
   }
+
   .card {
     grid-column: span 1 !important;
   }
+
   .sensor-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1104,7 +1147,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
   opacity: 0;
   transform: translateY(20px) scale(0.95);
   pointer-events: none;
@@ -1119,7 +1162,7 @@ body {
 
 .chatbot-header {
   padding: 16px 20px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
@@ -1215,6 +1258,47 @@ body {
   gap: 10px;
 }
 
+/* Fallback / offline bubble style */
+.fallback-bubble {
+  border-color: rgba(252, 212, 65, 0.2) !important;
+  background: rgba(252, 212, 65, 0.05) !important;
+  white-space: pre-wrap;
+}
+
+.fallback-badge {
+  font-size: 0.65rem;
+  color: var(--accent-yellow);
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
+/* Quick suggestion chips */
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.chat-chip {
+  padding: 5px 11px;
+  border-radius: 16px;
+  font-size: 0.72rem;
+  font-family: var(--font-sans);
+  background: rgba(252, 212, 65, 0.08);
+  border: 1px solid rgba(252, 212, 65, 0.2);
+  color: var(--accent-yellow);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.chat-chip:hover {
+  background: rgba(252, 212, 65, 0.18);
+  border-color: var(--accent-yellow);
+}
+
 .chatbot-input input {
   flex: 1;
   background: var(--bg-glass);
@@ -1255,12 +1339,25 @@ body {
   animation: bounce 1.4s infinite ease-in-out both;
 }
 
-.message-bubble.loading span:nth-child(1) { animation-delay: -0.32s; }
-.message-bubble.loading span:nth-child(2) { animation-delay: -0.16s; }
+.message-bubble.loading span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.message-bubble.loading span:nth-child(2) {
+  animation-delay: -0.16s;
+}
 
 @keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); }
-  40% { transform: scale(1.0); }
+
+  0%,
+  80%,
+  100% {
+    transform: scale(0);
+  }
+
+  40% {
+    transform: scale(1.0);
+  }
 }
 
 
@@ -1371,3 +1468,34 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Groq LLM Badge ────────────────────────────────────────────── */
+.groq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px 10px;
+  background: rgba(0, 212, 170, 0.08);
+  border: 1px solid rgba(0, 212, 170, 0.25);
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: #00d4aa;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.fallback-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px 10px;
+  background: rgba(252, 212, 65, 0.08);
+  border: 1px solid rgba(252, 212, 65, 0.2);
+  border-radius: 20px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  color: var(--accent-yellow);
+  font-weight: 600;
+}

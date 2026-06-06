@@ -6,23 +6,34 @@ export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [chatHistory, setChatHistory] = useState([
-    { role: 'assistant', content: 'Hello! I am your LeakSense AI Advisor. How can I help you with your Cat C18 diagnostics today?' }
+    { role: 'assistant', content: 'Hello! I am your LeakSense AI Advisor powered by Groq LLaMA 3.3. How can I help you with your Cat C18 diagnostics today?', source: 'system' }
   ])
   const [isLoading, setIsLoading] = useState(false)
+  const [backendStatus, setBackendStatus] = useState('unknown') // 'online' | 'offline' | 'unknown'
   const scrollRef = useRef(null)
 
+  // Scroll to bottom on new message
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }, [chatHistory, isLoading])
 
+  // Ping backend health on open
+  useEffect(() => {
+    if (!isOpen) return
+    fetch(`${API_BASE}/api/health`)
+      .then(r => r.ok ? setBackendStatus('online') : setBackendStatus('offline'))
+      .catch(() => setBackendStatus('offline'))
+  }, [isOpen])
+
   const handleSend = async (e) => {
     e.preventDefault()
     if (!message.trim() || isLoading) return
 
-    const userMessage = { role: 'user', content: message }
-    setChatHistory(prev => [...prev, userMessage])
+    const userMsg = { role: 'user', content: message }
+    setChatHistory(prev => [...prev, userMsg])
+    const sentMessage = message
     setMessage('')
     setIsLoading(true)
 
@@ -31,17 +42,38 @@ export default function ChatBot() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: message,
-          history: chatHistory
-        })
+          message: sentMessage,
+          history: chatHistory.filter(m => m.role !== 'system'),
+        }),
       })
 
-      if (!response.ok) throw new Error('Chat API error')
-      
+      if (!response.ok) {
+        const errText = await response.text()
+        throw new Error(`HTTP ${response.status}: ${errText.slice(0, 100)}`)
+      }
+
       const data = await response.json()
-      setChatHistory(prev => [...prev, { role: 'assistant', content: data.response }])
+      const isFallback = data.source === 'fallback' || data.source === 'offline_fallback'
+      setChatHistory(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.response,
+          source: data.source || 'api',
+          isFallback,
+          apiError: data.api_error,
+        }
+      ])
     } catch (err) {
-      setChatHistory(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error connecting to the AI advisor.' }])
+      setChatHistory(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `⚠️ Could not reach the backend. Make sure the server is running at ${API_BASE}.\n\nError: ${err.message}`,
+          source: 'error',
+          isFallback: true,
+        }
+      ])
     } finally {
       setIsLoading(false)
     }
@@ -49,7 +81,7 @@ export default function ChatBot() {
 
   return (
     <div className={`chatbot-wrapper ${isOpen ? 'open' : ''}`}>
-      <button className="chatbot-toggle" onClick={() => setIsOpen(!isOpen)}>
+      <button className="chatbot-toggle" onClick={() => setIsOpen(!isOpen)} title="AI Advisor">
         {isOpen ? '×' : '💬'}
       </button>
 
@@ -59,19 +91,36 @@ export default function ChatBot() {
             <div className="chatbot-icon">🤖</div>
             <div>
               <h3>AI Advisor</h3>
-              <p>LeakSense Twin Logic</p>
+              <p>Groq · LLaMA 3.3 · Cat C18</p>
             </div>
           </div>
           <div className="chatbot-status">
-            <span className="chat-status-dot"></span>
-            Online
+            <span
+              className="chat-status-dot"
+              style={{
+                background: backendStatus === 'online'
+                  ? 'var(--accent-emerald)'
+                  : backendStatus === 'offline'
+                    ? 'var(--accent-red)'
+                    : 'var(--accent-yellow)',
+              }}
+            />
+            {backendStatus === 'online' ? 'Online' : backendStatus === 'offline' ? 'Offline' : 'Connecting…'}
           </div>
         </div>
 
         <div className="chatbot-messages" ref={scrollRef}>
           {chatHistory.map((msg, i) => (
             <div key={i} className={`message ${msg.role}`}>
-              <div className="message-bubble">{msg.content}</div>
+              <div className={`message-bubble ${msg.isFallback ? 'fallback-bubble' : ''}`}>
+                {msg.content}
+                {msg.source === 'groq' && (
+                  <div className="groq-badge">⚡ Groq · LLaMA 3.3</div>
+                )}
+                {msg.isFallback && msg.source !== 'system' && (
+                  <div className="fallback-badge">📡 Offline mode</div>
+                )}
+              </div>
             </div>
           ))}
           {isLoading && (
@@ -83,15 +132,36 @@ export default function ChatBot() {
           )}
         </div>
 
+        {/* Quick suggestion chips */}
+        {chatHistory.length <= 1 && !isLoading && (
+          <div className="chat-suggestions">
+            {['What are the 5 leak zones?', 'Explain Energy Field', 'Current sensor status'].map(q => (
+              <button
+                key={q}
+                className="chat-chip"
+                onClick={() => {
+                  setMessage(q)
+                  // Submit programmatically via timeout so state is set
+                  setTimeout(() => {
+                    document.querySelector('.chatbot-input button[type="submit"]')?.click()
+                  }, 50)
+                }}
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+
         <form className="chatbot-input" onSubmit={handleSend}>
           <input
             type="text"
-            placeholder="Ask about sensors, leaks..."
+            placeholder="Ask about sensors, leaks, zones…"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             disabled={isLoading}
           />
-          <button type="submit" disabled={isLoading}>🚀</button>
+          <button type="submit" disabled={isLoading || !message.trim()}>🚀</button>
         </form>
       </div>
     </div>
