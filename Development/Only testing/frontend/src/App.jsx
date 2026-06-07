@@ -709,6 +709,50 @@ function App() {
       });
       const result = await res.json();
       setAcousticResult(result);
+
+      // Make it affect the global prediction data / status!
+      const isLeak = result.prediction === 'LEAK';
+      const confidence = isLeak ? result.leak_probability : result.healthy_probability;
+      
+      const newPredictionData = {
+        leak_detected: isLeak,
+        confidence: confidence,
+        suspected_zone: isLeak ? "Acoustic Leak Detected" : "No Leak / Healthy",
+        suspected_zone_idx: isLeak ? 2 : 0, // default to Zone 2 or 0
+        zone_probabilities: isLeak ? [0.1, 0.1, 0.8, 0.0, 0.0, 0.0] : [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        severity: isLeak ? (confidence > 0.85 ? "CRITICAL" : (confidence > 0.7 ? "MEDIUM" : "SMALL")) : "NONE",
+        flow_loss_pct: isLeak ? (confidence > 0.85 ? 15.0 : (confidence > 0.7 ? 8.0 : 2.0)) : 0.0,
+        go_no_go: isLeak ? "NO-GO" : "GO",
+        recommended_action: isLeak 
+          ? `Acoustic Analysis: High-frequency leak noise signatures detected in engine sound. Inspect turbocharger, boost pipes, and manifolds immediately.`
+          : "Acoustic Analysis: Engine sound pattern is normal. System healthy.",
+        residuals: {
+          res_MAF: isLeak ? -50.0 : 0.0,
+          res_MAP_boost: isLeak ? -15.0 : 0.0,
+          res_T_boost: isLeak ? 10.0 : 0.0,
+          res_T_cac_out: 0.0,
+          res_MAP_cac_out: 0.0,
+          res_T_exh_manifold: 0.0,
+          res_T_post_turbine: 0.0,
+          res_dP_dpf: 0.0,
+          res_MAP_intake: 0.0
+        },
+        sensors: {
+          ...manualSensors,
+          RPM: manualSensors.RPM,
+        },
+        energy_field: {
+          matrix: isLeak ? Array(6).fill(Array(6).fill(0.5)) : Array(6).fill(Array(6).fill(0.0)),
+          global_deviation: isLeak ? 4.5 : 0.5,
+          cosine_similarity: isLeak ? 0.85 : 0.98,
+          most_disrupted_sensor: isLeak ? "MAF" : "N/A",
+          ef_suspected_zone: isLeak ? "Zone 2" : "N/A"
+        }
+      };
+
+      setPredictionData(newPredictionData);
+      setHistory(prev => [...prev.slice(-100), newPredictionData]);
+
     } catch (err) {
       console.error('Error analyzing sound:', err);
     } finally {
@@ -967,8 +1011,6 @@ function App() {
               />
               <GoNoGoIndicator status={data.go_no_go} />
               <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
-              <LeakAlertCard data={data} />
-              <ZoneProbabilities probs={data.zone_probabilities} />
               <AcousticLeakDetector
                 audioFiles={audioFiles}
                 selectedCategory={selectedCategory}
@@ -980,6 +1022,8 @@ function App() {
                 acousticResult={acousticResult}
                 isLoading={isAcousticLoading}
               />
+              <LeakAlertCard data={data} />
+              <ZoneProbabilities probs={data.zone_probabilities} />
             </div>
           )}
 
