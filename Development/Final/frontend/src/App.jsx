@@ -1004,14 +1004,6 @@ function App() {
               setSensors={setManualSensors} 
               onSensorChange={handleManualSensorChange} 
             />
-            <EnergyFieldGraph efData={data.energy_field} />
-            <EngineDiagram 
-              zoneIdx={data.suspected_zone_idx} 
-              leakDetected={data.leak_detected} 
-              onZoneClick={handleZoneClick}
-            />
-            <GoNoGoIndicator status={data.go_no_go} />
-            <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
             <AcousticLeakDetector
               audioFiles={audioFiles}
               selectedCategory={selectedCategory}
@@ -1023,6 +1015,14 @@ function App() {
               acousticResult={acousticResult}
               isLoading={isAcousticLoading}
             />
+            <EngineDiagram 
+              zoneIdx={data.suspected_zone_idx} 
+              leakDetected={data.leak_detected} 
+              onZoneClick={handleZoneClick}
+            />
+            <GoNoGoIndicator status={data.go_no_go} />
+            <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
+            <EnergyFieldGraph efData={data.energy_field} />
             <LeakAlertCard data={data} />
             <ZoneProbabilities probs={data.zone_probabilities} />
           </div>
