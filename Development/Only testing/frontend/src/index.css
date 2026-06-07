@@ -1499,3 +1499,12 @@ body {
   color: var(--accent-yellow);
   font-weight: 600;
 }
+
+/* ── Acoustic Leak Detector ────────────────────────────────────── */
+.acoustic-card {
+  grid-column: span 2;
+}
+
+.audio-player-wrapper audio {
+  outline: none;
+}

@@ -1371,3 +1371,13 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Acoustic Leak Detector ────────────────────────────────────── */
+.acoustic-card {
+  grid-column: span 2;
+}
+
+.audio-player-wrapper audio {
+  outline: none;
+}
+
+

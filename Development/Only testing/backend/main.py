@@ -433,6 +433,93 @@ async def get_history(limit: int = 50):
     return prediction_history[-limit:]
 
 
+class AudioPredictRequest(BaseModel):
+    category: str
+    filename: str
+
+@app.get("/api/audio/files")
+async def list_audio_files():
+    data_dir = os.path.join(BACKEND_DIR, "Data")
+    good_dir = os.path.join(data_dir, "good")
+    leak_dir = os.path.join(data_dir, "leak")
+    
+    good_files = []
+    if os.path.exists(good_dir):
+        good_files = [f for f in os.listdir(good_dir) if f.endswith(".wav")]
+        
+    leak_files = []
+    if os.path.exists(leak_dir):
+        leak_files = [f for f in os.listdir(leak_dir) if f.endswith(".wav")]
+        
+    return {
+        "good": sorted(good_files),
+        "leak": sorted(leak_files)
+    }
+
+@app.get("/api/audio/play/{category}/{filename}")
+async def play_audio_file(category: str, filename: str):
+    from fastapi.responses import FileResponse
+    if category not in ["good", "leak"]:
+        raise HTTPException(400, "Invalid category")
+    
+    file_path = os.path.join(BACKEND_DIR, "Data", category, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(404, f"Audio file not found: {filename}")
+        
+    return FileResponse(file_path, media_type="audio/wav")
+
+@app.post("/api/audio/predict")
+async def predict_audio(body: AudioPredictRequest):
+    category = body.category
+    filename = body.filename
+    
+    if category not in ["good", "leak"]:
+        raise HTTPException(400, "Invalid category")
+        
+    file_path = os.path.join(BACKEND_DIR, "Data", category, filename)
+    if not os.path.exists(file_path):
+        raise HTTPException(404, "Audio file not found")
+        
+    try:
+        model_path = os.path.join(MODELS_DIR, "acoustic_model.joblib")
+        scaler_path = os.path.join(MODELS_DIR, "acoustic_scaler.joblib")
+        
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            raise HTTPException(503, "Acoustic model/scaler not found. Please train first.")
+            
+        model = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+        
+        from ml.train_audio import extract_audio_features
+        feats = extract_audio_features(file_path)
+        
+        feats_scaled = scaler.transform([feats])
+        pred = int(model.predict(feats_scaled)[0])
+        probs = model.predict_proba(feats_scaled)[0].tolist()
+        
+        return {
+            "prediction": "LEAK" if pred == 1 else "HEALTHY",
+            "leak_probability": probs[1],
+            "healthy_probability": probs[0],
+            "features": {
+                "rms": round(feats[0], 4),
+                "peak": round(feats[1], 4),
+                "crest_factor": round(feats[2], 4),
+                "zero_crossings": round(feats[3], 4),
+                "spectral_centroid": round(feats[4], 2),
+                "spectral_flatness": round(feats[5], 6),
+                "band_1": round(feats[6], 4),
+                "band_2": round(feats[7], 4),
+                "band_3": round(feats[8], 4),
+                "band_4": round(feats[9], 4)
+            }
+        }
+    except Exception as e:
+        print(f"Acoustic prediction error: {e}")
+        raise HTTPException(500, str(e))
+
+
+
 @app.get("/api/zones")
 async def get_zones():
     """Get zone definitions."""

@@ -519,6 +519,146 @@ function EnergyFieldGraph({ efData }) {
   )
 }
 
+// ─── Acoustic Leak Detector Component ──────────────────────────────
+function AcousticLeakDetector({ 
+  audioFiles, 
+  selectedCategory, 
+  setSelectedCategory, 
+  selectedFile, 
+  setSelectedFile, 
+  handleCategoryChange, 
+  analyzeSound, 
+  acousticResult, 
+  isLoading 
+}) {
+  const categories = [
+    { id: 'good', name: 'Healthy Sounds' },
+    { id: 'leak', name: 'Leak Sounds' }
+  ];
+
+  const files = audioFiles[selectedCategory] || [];
+  const audioUrl = selectedFile ? `${API_BASE}/api/audio/play/${selectedCategory}/${selectedFile}` : '';
+
+  return (
+    <div className="card acoustic-card">
+      <div className="card-header">
+        <span className="card-title">Acoustic Leak Detection</span>
+        <span className="card-icon">🔊</span>
+      </div>
+      <div className="acoustic-container" style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '10px 0' }}>
+        
+        <div className="acoustic-control-group" style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ flex: 1 }}>
+            <label className="sensor-label" style={{ marginBottom: '5px', display: 'block' }}>Engine State</label>
+            <select 
+              className="demo-select" 
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              value={selectedCategory} 
+              onChange={e => handleCategoryChange(e.target.value)}
+            >
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ flex: 2 }}>
+            <label className="sensor-label" style={{ marginBottom: '5px', display: 'block' }}>Select Audio Track</label>
+            <select 
+              className="demo-select" 
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', background: 'var(--bg-glass)', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}
+              value={selectedFile} 
+              onChange={e => setSelectedFile(e.target.value)}
+            >
+              {files.map(f => (
+                <option key={f} value={f}>{f.replace('engine_', '').replace('.wav', '')}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {audioUrl && (
+          <div className="audio-player-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255, 255, 255, 0.03)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <span className="sensor-label" style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Audio Player</span>
+            <audio key={audioUrl} controls style={{ width: '100%', height: '32px' }}>
+              <source src={audioUrl} type="audio/wav" />
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+        )}
+
+        <button 
+          className="demo-btn" 
+          style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-yellow) 0%, #ff9800 100%)', color: '#000', fontWeight: 'bold', border: 'none', padding: '10px', borderRadius: '6px', cursor: 'pointer' }}
+          onClick={analyzeSound}
+          disabled={isLoading || !selectedFile}
+        >
+          {isLoading ? 'Analyzing Audio Frequencies...' : '🔍 Analyze Audio Leak Signatures'}
+        </button>
+
+        {acousticResult && (
+          <div className="acoustic-result-wrapper" style={{ animation: 'fadeIn 0.3s ease-in-out', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '5px' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', 
+              padding: '12px', 
+              borderRadius: '8px',
+              border: '1px solid',
+              background: acousticResult.prediction === 'LEAK' ? 'rgba(239, 83, 80, 0.1)' : 'rgba(76, 175, 80, 0.1)',
+              borderColor: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
+            }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Acoustic Classification</div>
+                <div style={{ 
+                  fontSize: '1.4rem', 
+                  fontWeight: '800', 
+                  color: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)' 
+                }}>
+                  {acousticResult.prediction}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Probability</div>
+                <div style={{ 
+                  fontSize: '1.4rem', 
+                  fontWeight: '800',
+                  color: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
+                }}>
+                  {Math.round((acousticResult.prediction === 'LEAK' ? acousticResult.leak_probability : acousticResult.healthy_probability) * 100)}%
+                </div>
+              </div>
+            </div>
+
+            <div className="acoustic-features" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>RMS Energy:</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{acousticResult.features.rms.toFixed(4)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Peak Amp:</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{acousticResult.features.peak.toFixed(4)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Spectral Centroid:</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: 'var(--accent-yellow)' }}>{acousticResult.features.spectral_centroid.toFixed(0)} Hz</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Zero-Crossing Rate:</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{acousticResult.features.zero_crossings.toFixed(4)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gridColumn: 'span 2', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>High Frequency (4kHz+) Energy Ratio:</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--text-primary)' }}>{(acousticResult.features.band_4 * 1000).toFixed(2)}‰</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Main App ────────────────────────────────────────────────────
 function App() {
   const [showIntro, setShowIntro] = useState(true)
@@ -535,6 +675,61 @@ function App() {
   const wsRef = useRef(null)
   const demoWsRef = useRef(null)
   const debounceRef = useRef(null)
+
+  // Acoustic states
+  const [audioFiles, setAudioFiles] = useState({ good: [], leak: [] })
+  const [selectedCategory, setSelectedCategory] = useState('good')
+  const [selectedFile, setSelectedFile] = useState('')
+  const [acousticResult, setAcousticResult] = useState(null)
+  const [isAcousticLoading, setIsAcousticLoading] = useState(false)
+
+  const handleCategoryChange = (cat) => {
+    setSelectedCategory(cat);
+    const files = audioFiles[cat] || [];
+    if (files.length > 0) {
+      setSelectedFile(files[0]);
+    } else {
+      setSelectedFile('');
+    }
+    setAcousticResult(null);
+  };
+
+  const analyzeSound = async () => {
+    if (!selectedFile) return;
+    setIsAcousticLoading(true);
+    setAcousticResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/audio/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: selectedCategory,
+          filename: selectedFile,
+        }),
+      });
+      const result = await res.json();
+      setAcousticResult(result);
+    } catch (err) {
+      console.error('Error analyzing sound:', err);
+    } finally {
+      setIsAcousticLoading(false);
+    }
+  };
+
+  // Fetch audio files list on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/audio/files`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && (data.good || data.leak)) {
+          setAudioFiles(data)
+          if (data.good && data.good.length > 0) {
+            setSelectedFile(data.good[0])
+          }
+        }
+      })
+      .catch(err => console.error('Error fetching audio files:', err))
+  }, [])
 
   const handleManualSensorChange = (newSensors) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -774,6 +969,17 @@ function App() {
               <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
               <LeakAlertCard data={data} />
               <ZoneProbabilities probs={data.zone_probabilities} />
+              <AcousticLeakDetector
+                audioFiles={audioFiles}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                selectedFile={selectedFile}
+                setSelectedFile={setSelectedFile}
+                handleCategoryChange={handleCategoryChange}
+                analyzeSound={analyzeSound}
+                acousticResult={acousticResult}
+                isLoading={isAcousticLoading}
+              />
             </div>
           )}
 
