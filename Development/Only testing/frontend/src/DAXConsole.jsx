@@ -560,7 +560,7 @@ export default function DAXConsole() {
       <div className="card" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase' }}>
-            💻 DAX Query Console Sandbox
+            💻 Sensor Query Sandbox
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <label className="sensor-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'none', fontSize: '0.72rem', cursor: 'pointer' }}>

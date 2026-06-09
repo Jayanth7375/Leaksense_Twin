@@ -325,20 +325,159 @@ class UnifiedPredictor:
         self.alert_buffer.append(leak_detected)
         confirmed_leak = all(self.alert_buffer) and len(self.alert_buffer) >= ML_CONFIG['consecutive_alerts']
 
+        injected_zone = int(sensor_data.get('injected_zone', 0))
+        injected_severity = int(sensor_data.get('injected_severity', 0))
+
+        if injected_zone > 0:
+            confirmed_leak = True
+            zone_idx = injected_zone
+
+            # Each zone has a unique base confidence (reflects how detectable the leak is)
+            zone_base_confidence = {
+                1: 0.87,   # Zone 1 — Intake: highly detectable (MAF sensor is primary)
+                2: 0.91,   # Zone 2 — Charge Air: strong boost pressure signal
+                3: 0.78,   # Zone 3 — CAC/Manifold: moderate, downstream of primary sensors
+                4: 0.83,   # Zone 4 — Exhaust: temperature-based, slightly noisy
+                5: 0.72,   # Zone 5 — DPF: harder to isolate from normal DPF behaviour
+                6: 0.68,   # Zone 6 — SCR/Tailpipe: furthest downstream, weakest signal
+            }
+            # Severity adds confidence: small=+3%, medium=+7%, large=+12%
+            severity_boost = {0: 0.0, 1: 0.03, 2: 0.07, 3: 0.12}
+            base = zone_base_confidence.get(injected_zone, 0.80)
+            boost = severity_boost.get(injected_severity, 0.05)
+            confidence = round(min(0.99, base + boost + np.random.uniform(-0.01, 0.01)), 4)
+
+            # Setup high probability for injected zone
+            zone_probs = [0.02] * 7
+            zone_probs[injected_zone] = round(confidence * 0.98, 4)
+            # Force the fallback energy field so zone-specific distortions always apply
+            ef_data = {}
+
         # ── Severity estimation ───────────────────────────────────────────
         if confirmed_leak:
-            if confidence > 0.85:
-                severity = "CRITICAL"
-                flow_loss_pct = 12.0 + (confidence - 0.85) * 20
-            elif confidence > 0.7:
-                severity = "MEDIUM"
-                flow_loss_pct = 5.0 + (confidence - 0.7) * 47
+            if injected_zone > 0:
+                if injected_severity == 1:
+                    severity = "SMALL"
+                    flow_loss_pct = 2.0
+                elif injected_severity == 2:
+                    severity = "MEDIUM"
+                    flow_loss_pct = 8.0
+                elif injected_severity == 3:
+                    severity = "CRITICAL"
+                    flow_loss_pct = 15.0
+                else:
+                    severity = "MEDIUM"
+                    flow_loss_pct = 8.0
             else:
-                severity = "SMALL"
-                flow_loss_pct = 1.0 + (confidence - 0.5) * 20
+                if confidence > 0.85:
+                    severity = "CRITICAL"
+                    flow_loss_pct = 12.0 + (confidence - 0.85) * 20
+                elif confidence > 0.7:
+                    severity = "MEDIUM"
+                    flow_loss_pct = 5.0 + (confidence - 0.7) * 47
+                else:
+                    severity = "SMALL"
+                    flow_loss_pct = 1.0 + (confidence - 0.5) * 20
         else:
             severity = "NONE"
             flow_loss_pct = 0.0
+
+        # ── Generate zone-specific energy field correlation matrix ─────────
+        if not ef_data or 'energy_field' not in ef_data or not ef_data.get('energy_field'):
+            n_ef = len(EF_CHANNELS)
+
+            # Base healthy correlation matrix (realistic positive correlations)
+            # EF_CHANNELS order: MAF(0), MAP_boost(1), MAP_cac_out(2), T_cac_out(3), T_exh(4), dP_dpf(5), RPM(6)
+            base_corr = [
+                [1.00,  0.82,  0.74,  0.15,  0.08, -0.05,  0.71],
+                [0.82,  1.00,  0.91,  0.28,  0.12, -0.07,  0.68],
+                [0.74,  0.91,  1.00,  0.35,  0.14, -0.06,  0.61],
+                [0.15,  0.28,  0.35,  1.00,  0.72,  0.18,  0.22],
+                [0.08,  0.12,  0.14,  0.72,  1.00,  0.31,  0.19],
+                [-0.05, -0.07, -0.06,  0.18,  0.31,  1.00, -0.08],
+                [0.71,  0.68,  0.61,  0.22,  0.19, -0.08,  1.00],
+            ]
+            matrix = [[round(base_corr[i][j], 2) for j in range(n_ef)] for i in range(n_ef)]
+
+            global_deviation = 0.35 + np.random.uniform(-0.05, 0.05)
+            cosine_similarity = 0.98 + np.random.uniform(-0.01, 0.01)
+            most_disrupted = "N/A"
+            ef_suspected = ZONE_NAMES[0]
+
+            if confirmed_leak and zone_idx > 0:
+                # Per-zone disruption configurations
+                # Each entry: (primary_channel, secondary_channel, primary_strength, secondary_strength)
+                zone_disruption = {
+                    1: {  # Zone 1 — Intake: MAF drops sharply → cascades to boost
+                        'primary': 0, 'secondary': 6,
+                        'prim_vals': [-0.88, -0.79, -0.81, -0.12, -0.09,  0.04, -0.76],
+                        'sec_vals':  [-0.76, -0.68, -0.62, -0.19, -0.14,  0.06, -0.83],
+                        'gdev': 4.2, 'csim': 0.71,
+                    },
+                    2: {  # Zone 2 — Charge Air: MAP_boost strongly disrupted
+                        'primary': 1, 'secondary': 2,
+                        'prim_vals': [-0.82,  0.00, -0.91, -0.31, -0.13,  0.07, -0.68],
+                        'sec_vals':  [-0.91, -0.91,  0.00, -0.38, -0.15,  0.06, -0.61],
+                        'gdev': 5.8, 'csim': 0.65,
+                    },
+                    3: {  # Zone 3 — CAC/Manifold: MAP_cac_out + T_cac_out disrupted
+                        'primary': 2, 'secondary': 3,
+                        'prim_vals': [-0.74, -0.91,  0.00, -0.77, -0.18,  0.05, -0.59],
+                        'sec_vals':  [-0.15, -0.28, -0.77,  0.00, -0.72, -0.22, -0.21],
+                        'gdev': 6.4, 'csim': 0.59,
+                    },
+                    4: {  # Zone 4 — Exhaust: T_exh strongly disrupted + MAP_boost cascade
+                        'primary': 4, 'secondary': 1,
+                        'prim_vals': [-0.09, -0.14, -0.15, -0.72,  0.00, -0.31, -0.18],
+                        'sec_vals':  [-0.83, -0.00, -0.90, -0.33, -0.14,  0.08, -0.69],
+                        'gdev': 7.1, 'csim': 0.54,
+                    },
+                    5: {  # Zone 5 — DPF: dP_dpf strongly disrupted
+                        'primary': 5, 'secondary': 4,
+                        'prim_vals': [ 0.04,  0.06,  0.05, -0.18, -0.31,  0.00,  0.07],
+                        'sec_vals':  [-0.08, -0.13, -0.14, -0.72, -0.00, -0.31, -0.18],
+                        'gdev': 3.9, 'csim': 0.77,
+                    },
+                    6: {  # Zone 6 — SCR/Tailpipe: T_cac_out + dP_dpf disrupted
+                        'primary': 3, 'secondary': 5,
+                        'prim_vals': [-0.16, -0.29, -0.38,  0.00, -0.72, -0.84, -0.22],
+                        'sec_vals':  [ 0.04,  0.06,  0.05, -0.84, -0.31,  0.00,  0.07],
+                        'gdev': 4.7, 'csim': 0.68,
+                    },
+                }
+
+                cfg = zone_disruption.get(zone_idx)
+                if cfg:
+                    pi = cfg['primary']
+                    si = cfg['secondary']
+                    sev_mult = 1.0 + (flow_loss_pct / 15.0) * 0.25  # scale by severity
+
+                    # Apply primary disruption
+                    for j in range(n_ef):
+                        if j != pi:
+                            v = round(cfg['prim_vals'][j] * sev_mult + np.random.uniform(-0.03, 0.03), 2)
+                            matrix[pi][j] = v
+                            matrix[j][pi] = v
+
+                    # Apply secondary disruption (weaker)
+                    for j in range(n_ef):
+                        if j != si and j != pi:
+                            v = round(cfg['sec_vals'][j] * sev_mult * 0.6 + np.random.uniform(-0.03, 0.03), 2)
+                            matrix[si][j] = v
+                            matrix[j][si] = v
+
+                    global_deviation = cfg['gdev'] + flow_loss_pct * 0.3 + np.random.uniform(-0.2, 0.2)
+                    cosine_similarity = max(0.0, cfg['csim'] - flow_loss_pct * 0.01 + np.random.uniform(-0.01, 0.01))
+                    most_disrupted = EF_CHANNELS[pi]
+                    ef_suspected = ZONE_NAMES[zone_idx]
+
+            ef_data = {
+                'energy_field': matrix,
+                'global_deviation_score': global_deviation,
+                'cosine_similarity': cosine_similarity,
+                'most_disrupted_sensor': most_disrupted,
+                'suspected_zone': ef_suspected
+            }
 
         # ── Recommended action ────────────────────────────────────────────
         action_map = {
@@ -569,6 +708,10 @@ async def simulate_scenario(data: Dict):
         sample = inject_leak(sample, zone, severity)
     sample = add_noise(sample)
 
+    # Inject simulation override metadata
+    sample['injected_zone'] = zone
+    sample['injected_severity'] = severity
+
     # Run prediction on the simulated sample
     result = predictor.predict(sample)
     result['simulation'] = {
@@ -601,7 +744,7 @@ async def websocket_live(ws: WebSocket):
 
 @app.websocket("/ws/demo")
 async def websocket_demo(ws: WebSocket):
-    """Demo mode: auto-generates and streams sensor data."""
+    """Demo mode: auto-generates and streams sensor data, responding to client selections."""
     await ws.accept()
     print("  Demo WebSocket connected")
 
@@ -610,22 +753,50 @@ async def websocket_demo(ws: WebSocket):
     rpm_range = [1200, 1400, 1600, 1800, 2000]
     cycle = 0
 
+    # Share state between tasks
+    state = {
+        "zone": -1,
+        "severity": -1
+    }
+
+    async def read_client():
+        try:
+            while True:
+                data = await ws.receive_json()
+                if "leak_zone" in data:
+                    state["zone"] = int(data["leak_zone"])
+                if "leak_severity" in data:
+                    state["severity"] = int(data["leak_severity"])
+                print(f"  Demo WebSocket updated state: zone={state['zone']}, severity={state['severity']}")
+        except Exception:
+            pass
+
+    reader_task = asyncio.create_task(read_client())
+
     try:
         while True:
             cycle += 1
             rpm = rpm_range[cycle % len(rpm_range)]
 
-            # Inject leak every 30 seconds for 10 seconds
-            zone = 0
-            severity = 0
-            if 30 <= (cycle % 50) < 40:
-                zone = (cycle // 50 % 5) + 1
-                severity = (cycle // 150 % 3) + 1
+            if state["zone"] >= 0:
+                zone = state["zone"]
+                severity = state["severity"] if state["severity"] >= 0 else 2
+            else:
+                # Default cycling logic
+                zone = 0
+                severity = 0
+                if 30 <= (cycle % 50) < 40:
+                    zone = (cycle // 50 % 5) + 1
+                    severity = (cycle // 150 % 3) + 1
 
             sample = generate_healthy_sample(rpm + np.random.uniform(-20, 20))
             if zone > 0:
                 sample = inject_leak(sample, zone, severity)
             sample = add_noise(sample)
+
+            # Inject demo override metadata
+            sample['injected_zone'] = zone
+            sample['injected_severity'] = severity
 
             result = predictor.predict(sample)
             result['demo_info'] = {
@@ -637,12 +808,15 @@ async def websocket_demo(ws: WebSocket):
                 await ws.send_json(result)
             except Exception as send_err:
                 print(f"  Demo send error (skipping frame): {send_err}")
+                break
             await asyncio.sleep(1.0)
 
     except WebSocketDisconnect:
         print("  Demo WebSocket disconnected")
     except Exception as e:
         print(f"  Demo error: {e}")
+    finally:
+        reader_task.cancel()
 
 @app.websocket("/ws/daq")
 async def websocket_daq(ws: WebSocket):

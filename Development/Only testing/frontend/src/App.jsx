@@ -53,7 +53,7 @@ function Sidebar({ activePage, setActivePage, isConnected }) {
     { id: 'dashboard', icon: '', label: 'Dashboard' },
     { id: 'engine', icon: '', label: 'Analysis' },
     { id: 'history', icon: '', label: 'History' },
-    { id: 'dax', icon: '', label: 'DAX Console' },
+    { id: 'dax', icon: '', label: 'Sensor Hub' },
     { id: 'digital-twin', icon: '', label: 'Digital Twin' },
   ]
 
@@ -213,6 +213,7 @@ function EnergyFieldHeatmap({ efData }) {
   const matrix = efData?.matrix || Array(6).fill(Array(6).fill(0))
 
   const getColor = (val) => {
+    if (val === 0) return '#316237'
     const v = Math.max(-1, Math.min(1, val))
     if (v >= 0) {
       const r = Math.round(255 * v)
@@ -361,14 +362,16 @@ function ZoneProbabilities({ probs }) {
 
 // ─── Engine Diagram ──────────────────────────────────────────────
 function EngineDiagram({ zoneIdx, leakDetected, onZoneClick }) {
-  const zones = [
-    { id: 1, name: 'Zone 1', desc: 'Intake — Airflow meter → Compressor' },
-    { id: 2, name: 'Zone 2', desc: 'Charge Air — Compressor → CAC' },
-    { id: 3, name: 'Zone 3', desc: 'CAC/Manifold — CAC → Intake ports' },
-    { id: 4, name: 'Zone 4', desc: 'Exhaust — Manifold → Turbine' },
-    { id: 5, name: 'Zone 5', desc: 'Aftertreatment — DPF' },
-    { id: 6, name: 'Zone 6', desc: 'Aftertreatment — SCR/Tailpipe' },
-  ]
+  const getZoneCard = (id, name, desc) => (
+    <div
+      className={`engine-zone ${leakDetected && zoneIdx === id ? 'leak' : 'healthy'}`}
+      onClick={() => onZoneClick && onZoneClick(id)}
+      style={{ cursor: onZoneClick ? 'pointer' : 'default' }}
+    >
+      <div className="engine-zone-name">{name}</div>
+      <div className="engine-zone-desc">{desc}</div>
+    </div>
+  )
 
   return (
     <div className="card engine-card">
@@ -376,20 +379,25 @@ function EngineDiagram({ zoneIdx, leakDetected, onZoneClick }) {
         <span className="card-title">Cat C18 Engine — Zone Map (Click to Simulate)</span>
         <span className="card-icon"></span>
       </div>
-      <div className="engine-diagram">
-        {zones.map((zone, idx) => (
-          <div key={zone.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              className={`engine-zone ${leakDetected && zoneIdx === zone.id ? 'leak' : 'healthy'}`}
-              onClick={() => onZoneClick && onZoneClick(zone.id)}
-              style={{ cursor: onZoneClick ? 'pointer' : 'default' }}
-            >
-              <div className="engine-zone-name">{zone.name}</div>
-              <div className="engine-zone-desc">{zone.desc}</div>
-            </div>
-            {idx < zones.length - 1 && <span className="zone-arrow">→</span>}
-          </div>
-        ))}
+      <div className="engine-diagram-grid">
+        {/* Row 1: Zones 1 to 4 */}
+        <div className="grid-cell-1">{getZoneCard(1, 'Zone 1', 'Intake — Airflow meter → Compressor')}</div>
+        <div className="grid-arrow-1">→</div>
+
+        <div className="grid-cell-2">{getZoneCard(2, 'Zone 2', 'Charge Air — Compressor → CAC')}</div>
+        <div className="grid-arrow-2">→</div>
+
+        <div className="grid-cell-3">{getZoneCard(3, 'Zone 3', 'CAC/Manifold — CAC → Intake ports')}</div>
+        <div className="grid-arrow-3">→</div>
+
+        <div className="grid-cell-4">{getZoneCard(4, 'Zone 4', 'Exhaust — Manifold → Turbine')}</div>
+        <div className="grid-arrow-4">→</div>
+
+        {/* Row 2: Zones 5 and 6 under Zone 2 and 3 */}
+        <div className="grid-cell-5">{getZoneCard(5, 'Zone 5', 'Aftertreatment — DPF')}</div>
+        <div className="grid-arrow-5">→</div>
+
+        <div className="grid-cell-6">{getZoneCard(6, 'Zone 6', 'Aftertreatment — SCR/Tailpipe')}</div>
       </div>
     </div>
   )
@@ -1083,32 +1091,12 @@ function App() {
     }, 100);
   };
 
-  const handleZoneClick = async (zoneId) => {
-    // We use the simulation API to ensure the sensor values perfectly match 
-    // the physics patterns the ML model was trained on for this specific zone.
-    try {
-      const res = await fetch(`${API_BASE}/api/simulate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rpm: 1800,
-          leak_zone: zoneId,
-          leak_severity: 2, // Medium leak (8% flow loss) for stable detection
-        }),
-      })
-      const data = await res.json()
-
-      // Update UI with the simulation result
-      setPredictionData(data)
-      if (data.sensors) {
-        setManualSensors(data.sensors)
-      }
-      setHistory(prev => [...prev.slice(-100), data])
-
-      console.log(`Simulated leak in Zone ${zoneId}:`, data.suspected_zone);
-    } catch (err) {
-      console.error('Zone click simulation error:', err)
+  const handleZoneClick = (zoneId) => {
+    if (isDemoRunning) {
+      stopDemo();
     }
+    setSimZone(zoneId);
+    setSimSeverity(2); // Default to Medium (8%) leak on click
   };
 
   // Fetch history on load
@@ -1130,6 +1118,11 @@ function App() {
     ws.onopen = () => {
       setIsConnected(true)
       setIsDemoRunning(true)
+      // Send initial overrides immediately if they were selected
+      ws.send(JSON.stringify({
+        leak_zone: simZone,
+        leak_severity: simSeverity
+      }))
     }
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data)
@@ -1157,7 +1150,7 @@ function App() {
       setIsDemoRunning(false)
     }
     demoWsRef.current = ws
-  }, [])
+  }, [simZone, simSeverity])
 
   const stopDemo = useCallback(() => {
     if (demoWsRef.current) {
@@ -1182,11 +1175,28 @@ function App() {
       })
       const data = await res.json()
       setPredictionData(data)
+      if (data.sensors) {
+        setManualSensors(data.sensors)
+      }
       setHistory(prev => [...prev.slice(-100), data])
     } catch (err) {
       console.error('Simulation error:', err)
     }
   }, [simZone, simSeverity])
+
+  // Auto-run simulation or update running demo when selection changes
+  useEffect(() => {
+    if (isDemoRunning) {
+      if (demoWsRef.current && demoWsRef.current.readyState === WebSocket.OPEN) {
+        demoWsRef.current.send(JSON.stringify({
+          leak_zone: simZone,
+          leak_severity: simSeverity
+        }))
+      }
+    } else if (daqStatus !== 'Connected') {
+      runSimulation()
+    }
+  }, [simZone, simSeverity, isDemoRunning, runSimulation, daqStatus])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1223,7 +1233,7 @@ function App() {
               {activePage === 'dashboard' && 'Real-Time Dashboard'}
               {activePage === 'engine' && 'Analysis'}
               {activePage === 'history' && 'Detection History'}
-              {activePage === 'dax' && 'DAX Engine Query Console'}
+              {activePage === 'dax' && 'Sensor Hub'}
               {activePage === 'digital-twin' && 'Digital Twin'}
             </h2>
             <div className="header-controls">
@@ -1247,26 +1257,6 @@ function App() {
               >
                 {isDemoRunning ? 'Stop Demo' : 'Start Live Demo'}
               </button>
-
-              {daqStatus === 'Connected' ? (
-                <button
-                  id="daq-toggle"
-                  className="demo-btn danger active"
-                  onClick={handleDisconnectDAQ}
-                >
-                  🛑 DISCONNECT STREAM
-                </button>
-              ) : (
-                <button
-                  id="daq-toggle"
-                  className="demo-btn active"
-                  style={{ borderColor: 'var(--accent-yellow)', color: 'var(--accent-yellow)', background: 'rgba(252,212,65,0.1)' }}
-                  onClick={handleConnectDAQ}
-                  disabled={daqStatus === 'Connecting'}
-                >
-                  {daqStatus === 'Connecting' ? 'Connecting...' : '⚡ INITIALIZE DAQ LINK'}
-                </button>
-              )}
 
               <select className="demo-select" value={simZone} onChange={e => setSimZone(Number(e.target.value))}>
                 <option value={0}>Healthy (No Leak)</option>
@@ -1345,7 +1335,7 @@ function App() {
             </div>
           )}
 
-          {/* DAX Console Page */}
+          {/* Sensor Intelligence Hub Page */}
           {activePage === 'dax' && (
             <div className="dashboard-grid">
               <DAXConsole />
