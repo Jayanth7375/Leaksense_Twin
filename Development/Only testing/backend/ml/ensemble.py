@@ -135,7 +135,12 @@ class LeakSenseEnsemble:
             final_confidence = 0.5
 
         # Weighted ensemble for zone localization
-        n_classes = 6
+        if 'loc_probs' in scores:
+            n_classes = len(scores['loc_probs'])
+        elif 'rf_zone_probs' in scores:
+            n_classes = len(scores['rf_zone_probs'])
+        else:
+            n_classes = 7
         zone_votes = np.zeros(n_classes)
 
         if 'loc_probs' in scores:

@@ -382,7 +382,7 @@ def run_training():
         test_pred_z = loc_net(X_test_t)
         test_zones = torch.argmax(test_pred_z, dim=1).numpy()
 
-    zone_names = ['Healthy', 'Zone 1', 'Zone 2', 'Zone 3', 'Zone 4', 'Zone 5']
+    zone_names = ['Healthy', 'Zone 1', 'Zone 2', 'Zone 3', 'Zone 4', 'Zone 5', 'Zone 6']
     print("\n Zone Localization (LocalizationNet):")
     print(classification_report(y_z_test, test_zones,
                                 target_names=zone_names, zero_division=0))
@@ -403,7 +403,7 @@ def run_training():
     # Save config
     config_info = {
         'input_dim': input_dim,
-        'n_classes': 6,
+        'n_classes': 7,
         'n_samples': len(df),
         'n_features': input_dim,
         'ensemble_f1': float(ens_f1),

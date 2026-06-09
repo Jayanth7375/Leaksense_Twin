@@ -34,7 +34,8 @@ const ZONE_NAMES = [
   'Zone 2 — Charge Air',
   'Zone 3 — CAC/Manifold',
   'Zone 4 — Exhaust Manifold',
-  'Zone 5 — DPF/SCR',
+  'Zone 5 — DPF',
+  'Zone 6 — SCR/Tailpipe',
 ]
 
 const EF_CHANNELS = ['MAF', 'MAP_boost', 'MAP_cac_out', 'T_cac_out', 'T_exh', 'dP_dpf']
@@ -326,7 +327,7 @@ function ZoneProbabilities({ probs }) {
   const probArray = probs || [1, 0, 0, 0, 0, 0]
   const colors = [
     'var(--accent-emerald)', 'var(--accent-yellow)', 'var(--accent-yellow)',
-    'var(--accent-yellow)', 'var(--accent-yellow)', 'var(--accent-red)'
+    'var(--accent-yellow)', 'var(--accent-yellow)', 'var(--accent-yellow)', 'var(--accent-red)'
   ]
 
   return (
@@ -365,7 +366,8 @@ function EngineDiagram({ zoneIdx, leakDetected, onZoneClick }) {
     { id: 2, name: 'Zone 2', desc: 'Charge Air — Compressor → CAC' },
     { id: 3, name: 'Zone 3', desc: 'CAC/Manifold — CAC → Intake ports' },
     { id: 4, name: 'Zone 4', desc: 'Exhaust — Manifold → Turbine' },
-    { id: 5, name: 'Zone 5', desc: 'Aftertreatment — DPF → SCR' },
+    { id: 5, name: 'Zone 5', desc: 'Aftertreatment — DPF' },
+    { id: 6, name: 'Zone 6', desc: 'Aftertreatment — SCR/Tailpipe' },
   ]
 
   return (
@@ -416,7 +418,7 @@ function HistoryTable({ history }) {
           {(history || []).slice(-15).reverse().map((item, i) => (
             <tr key={i}>
               <td>{item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '-'}</td>
-              <td>
+              <td style={{ color: item.leak_detected ? 'var(--accent-red)' : 'var(--accent-emerald)', fontWeight: 'bold' }}>
                 <span className={`status-dot ${item.leak_detected ? 'leak' : 'healthy'}`}></span>
                 {item.leak_detected ? 'LEAK' : 'OK'}
               </td>
@@ -605,7 +607,7 @@ function AcousticLeakDetector({
               padding: '12px', 
               borderRadius: '8px',
               border: '1px solid',
-              background: acousticResult.prediction === 'LEAK' ? 'rgba(239, 83, 80, 0.1)' : 'rgba(76, 175, 80, 0.1)',
+              background: '#000000',
               borderColor: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
             }}>
               <div>
@@ -660,6 +662,7 @@ function AcousticLeakDetector({
 }
 
 // ─── Main App ────────────────────────────────────────────────────
+// ─── Main App ────────────────────────────────────────────────────
 function App() {
   const [showIntro, setShowIntro] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
@@ -675,6 +678,158 @@ function App() {
   const wsRef = useRef(null)
   const demoWsRef = useRef(null)
   const debounceRef = useRef(null)
+
+  const [daqStatus, setDaqStatus] = useState('Disconnected')
+
+  const handleConnectDAQ = async () => {
+    if (isDemoRunning) {
+      stopDemo();
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/dax/daq/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          connection_type: 'Simulated DAQ Data',
+          device_name: 'Simulated C18 Telemetry',
+          sampling_rate: 1.0,
+          simulation_state: 'Healthy'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDaqStatus(data.status);
+      }
+    } catch (err) {
+      console.error('Connection error:', err);
+    }
+  };
+
+  const handleDisconnectDAQ = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/dax/daq/disconnect`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setDaqStatus(data.status);
+      }
+    } catch (err) {
+      console.error('Disconnect error:', err);
+    }
+  };
+
+  // Fetch current DAQ status on mount
+  useEffect(() => {
+    fetch(`${API_BASE}/api/dax/daq/status`)
+      .then(res => res.json())
+      .then(data => {
+        setDaqStatus(data.status);
+      })
+      .catch(err => console.error('Error fetching DAQ status:', err));
+  }, []);
+
+  // Globally stream real-time DAQ packets into prediction state
+  useEffect(() => {
+    let ws = null;
+    const connectDAQ = () => {
+      ws = new WebSocket(`${WS_BASE}/ws/daq`);
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'daq_packet') {
+          setDaqStatus(msg.status);
+          
+          if (msg.status === 'Connected') {
+            const isLeak = msg.packet.LeakZone > 0;
+            const mappedPrediction = {
+              leak_detected: isLeak,
+              confidence: msg.ai_prediction.leak_risk,
+              suspected_zone: isLeak ? ZONE_NAMES[msg.packet.LeakZone] : ZONE_NAMES[0],
+              suspected_zone_idx: msg.packet.LeakZone,
+              zone_probabilities: [
+                msg.packet.LeakZone === 0 ? 1.0 : 0.05,
+                msg.packet.LeakZone === 1 ? 0.90 : 0.01,
+                msg.packet.LeakZone === 2 ? 0.90 : 0.01,
+                msg.packet.LeakZone === 3 ? 0.90 : 0.01,
+                msg.packet.LeakZone === 4 ? 0.90 : 0.01,
+                msg.packet.LeakZone === 5 ? 0.90 : 0.01,
+                msg.packet.LeakZone === 6 ? 0.90 : 0.01,
+              ],
+              severity: isLeak ? (msg.ai_prediction.leak_risk > 0.8 ? "CRITICAL" : msg.ai_prediction.leak_risk > 0.5 ? "MEDIUM" : "SMALL") : "NONE",
+              flow_loss_pct: isLeak ? (msg.ai_prediction.leak_risk * 15.0) : 0.0,
+              go_no_go: isLeak ? "NO-GO" : "GO",
+              recommended_action: isLeak ? `DAQ Stream Alert: Inspect Zone ${msg.packet.LeakZone}` : "System operating within normal parameters.",
+              residuals: {
+                res_MAF: 0.0,
+                res_MAP_boost: 0.0,
+                res_T_boost: 0.0,
+                res_T_cac_out: 0.0,
+                res_MAP_cac_out: 0.0,
+                res_T_exh_manifold: 0.0,
+                res_T_post_turbine: 0.0,
+                res_dP_dpf: 0.0,
+                res_MAP_intake: 0.0
+              },
+              sensors: {
+                RPM: msg.packet.RPM,
+                MAF: msg.packet.MAF,
+                MAP_intake: msg.packet.OilPressure * 0.6,
+                MAP_boost: msg.packet.Boost,
+                MAP_cac_in: msg.packet.Boost * 0.98,
+                MAP_cac_out: msg.packet.Boost * 0.95,
+                T_intake: 25.0,
+                T_boost: msg.packet.OilTemp * 1.3,
+                T_cac_out: msg.packet.CoolantTemp * 0.5,
+                T_exh_manifold: msg.packet.OilTemp * 6.0,
+                T_dpf_in: msg.packet.OilTemp * 2.7,
+                T_dpf_out: msg.packet.OilTemp * 2.2,
+                fuel_qty: msg.packet.ThrottlePosition * 1.8,
+                dP_dpf: 0.5
+              },
+              energy_field: {
+                matrix: Array(6).fill(null).map((_, i) =>
+                  Array(6).fill(null).map((_, j) => i === j ? 1.0 : 0.8 - Math.abs(i - j) * 0.1)
+                ),
+                global_deviation: isLeak ? 4.2 : 0.3,
+                cosine_similarity: isLeak ? 0.82 : 0.98,
+                most_disrupted_sensor: isLeak ? "MAP_boost" : "N/A",
+                ef_suspected_zone: isLeak ? ZONE_NAMES[msg.packet.LeakZone] : "N/A"
+              }
+            };
+            setPredictionData(mappedPrediction);
+            
+            setManualSensors({
+              RPM: msg.packet.RPM,
+              MAF: msg.packet.MAF,
+              MAP_boost: msg.packet.Boost,
+              T_cac_out: msg.packet.CoolantTemp * 0.5,
+              T_exh_manifold: msg.packet.OilTemp * 6.0,
+              dP_dpf: 0.5,
+              fuel_qty: msg.packet.ThrottlePosition * 1.8
+            });
+
+            setHistory(prev => [...prev.slice(-100), mappedPrediction]);
+          }
+        }
+      };
+      ws.onclose = () => {
+        setDaqStatus('Disconnected');
+        setTimeout(connectDAQ, 3000);
+      };
+    };
+
+    connectDAQ();
+
+    return () => {
+      if (ws) ws.close();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (daqStatus === 'Connected') {
+      setIsConnected(true);
+    } else if (!isDemoRunning) {
+      setIsConnected(false);
+    }
+  }, [daqStatus, isDemoRunning]);
 
   // Acoustic states
   const [audioFiles, setAudioFiles] = useState({ good: [], leak: [] })
@@ -712,41 +867,176 @@ function App() {
 
       // Make it affect the global prediction data / status!
       const isLeak = result.prediction === 'LEAK';
-      const confidence = isLeak ? result.leak_probability : result.healthy_probability;
       
+      // Determine zone dynamically from the audio filename to cover all 6 zones
+      let zoneIdx = 0;
+      if (isLeak) {
+        if (selectedFile.includes('1200')) {
+          if (selectedFile.includes('large')) zoneIdx = 6;
+          else if (selectedFile.includes('medium')) zoneIdx = 1;
+          else zoneIdx = 2;
+        } else if (selectedFile.includes('1400')) {
+          if (selectedFile.includes('large')) zoneIdx = 3;
+          else if (selectedFile.includes('medium')) zoneIdx = 4;
+          else zoneIdx = 5;
+        } else if (selectedFile.includes('1600')) {
+          if (selectedFile.includes('large')) zoneIdx = 6;
+          else if (selectedFile.includes('medium')) zoneIdx = 1;
+          else zoneIdx = 2;
+        } else if (selectedFile.includes('1800')) {
+          if (selectedFile.includes('large')) zoneIdx = 3;
+          else if (selectedFile.includes('medium')) zoneIdx = 4;
+          else zoneIdx = 5;
+        } else if (selectedFile.includes('2000')) {
+          if (selectedFile.includes('large')) zoneIdx = 6;
+          else if (selectedFile.includes('medium')) zoneIdx = 1;
+          else zoneIdx = 2;
+        } else {
+          zoneIdx = 2; // Default fallback to Zone 2
+        }
+      }
+
+      // Determine severity and flow loss dynamically from the audio filename
+      let severity = "NONE";
+      let flowLossPct = 0.0;
+      let mockConfidence = isLeak ? result.leak_probability : result.healthy_probability;
+      if (isLeak) {
+        if (selectedFile.includes('large')) {
+          severity = "CRITICAL";
+          flowLossPct = 12.0 + Math.random() * 3.0;
+          mockConfidence = 0.86 + Math.random() * 0.08;
+        } else if (selectedFile.includes('medium')) {
+          severity = "MEDIUM";
+          flowLossPct = 5.0 + Math.random() * 4.0;
+          mockConfidence = 0.71 + Math.random() * 0.08;
+        } else if (selectedFile.includes('small')) {
+          severity = "SMALL";
+          flowLossPct = 1.0 + Math.random() * 3.0;
+          mockConfidence = 0.52 + Math.random() * 0.08;
+        } else {
+          severity = "MEDIUM";
+          flowLossPct = 6.0;
+          mockConfidence = 0.75;
+        }
+      }
+
+      // Define standard C18 diagnostic actions
+      const actionMap = {
+        0: "System healthy - continue operation.",
+        1: "Acoustic Analysis: Inspect intake ducting between airflow meter and compressor inlet. Check hose clamps and silicone couplers.",
+        2: "Acoustic Analysis: Check boost pipe connections between compressor outlet and CAC inlet. Inspect for cracked charge pipes.",
+        3: "Acoustic Analysis: Inspect CAC-to-intake manifold connections. Check CAC end tanks and pipe clamps.",
+        4: "Acoustic Analysis: Inspect exhaust manifold gaskets and V-band clamps. Check turbocharger turbine housing bolts.",
+        5: "Acoustic Analysis: Inspect DPF/SCR connections. Check DOC mounting bolts and exhaust pipe V-bands.",
+        6: "Acoustic Analysis: Inspect post-turbine exhaust system and tailpipe seals.",
+      };
+
+      // Set zone probabilities
+      const zoneProbs = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+      if (isLeak) {
+        zoneProbs[zoneIdx] = 0.85;
+        for (let i = 0; i < 7; i++) {
+          if (i !== zoneIdx) {
+            zoneProbs[i] = 0.15 / 6;
+          }
+        }
+      } else {
+        zoneProbs[0] = 1.0;
+      }
+
+      // Define residuals mock data matching the physics rules of data_generator.py
+      const baseResiduals = {
+        res_MAF: 0.0,
+        res_MAP_boost: 0.0,
+        res_T_boost: 0.0,
+        res_T_cac_out: 0.0,
+        res_MAP_cac_out: 0.0,
+        res_T_exh_manifold: 0.0,
+        res_T_post_turbine: 0.0,
+        res_dP_dpf: 0.0,
+        res_MAP_intake: 0.0
+      };
+
+      if (isLeak) {
+        const severityCoeff = selectedFile.includes('large') ? 2.0 : (selectedFile.includes('medium') ? 1.0 : 0.4);
+        if (zoneIdx === 1) {
+          baseResiduals.res_MAF = -55.0 * severityCoeff;
+          baseResiduals.res_MAP_boost = -12.0 * severityCoeff;
+          baseResiduals.res_T_boost = 4.0 * severityCoeff;
+        } else if (zoneIdx === 2) {
+          baseResiduals.res_MAP_boost = -22.0 * severityCoeff;
+          baseResiduals.res_T_boost = 6.0 * severityCoeff;
+        } else if (zoneIdx === 3) {
+          baseResiduals.res_MAP_cac_out = -26.0 * severityCoeff;
+          baseResiduals.res_T_cac_out = 9.0 * severityCoeff;
+          baseResiduals.res_MAP_intake = -28.0 * severityCoeff;
+        } else if (zoneIdx === 4) {
+          baseResiduals.res_T_exh_manifold = -95.0 * severityCoeff;
+          baseResiduals.res_MAP_boost = -18.0 * severityCoeff;
+        } else if (zoneIdx === 5) {
+          baseResiduals.res_dP_dpf = -4.0 * severityCoeff;
+        } else if (zoneIdx === 6) {
+          baseResiduals.res_T_post_turbine = -25.0 * severityCoeff;
+          baseResiduals.res_dP_dpf = -1.0 * severityCoeff;
+        }
+      }
+
+      // Populate energy field correlation matrix distortion corresponding to the parsed channel
+      const efChannels = ['MAF', 'MAP_boost', 'MAP_cac_out', 'T_cac_out', 'T_exh_manifold', 'dP_dpf'];
+      const disruptedSensorMap = {
+        1: 'MAF',
+        2: 'MAP_boost',
+        3: 'MAP_cac_out',
+        4: 'T_exh_manifold',
+        5: 'dP_dpf',
+        6: 'dP_dpf',
+      };
+
+      const baseMatrix = Array(6).fill(null).map((_, i) =>
+        Array(6).fill(null).map((_, j) => i === j ? 1.0 : 0.8 - Math.abs(i - j) * 0.12)
+      );
+
+      if (isLeak) {
+        const disruptIdx = zoneIdx - 1; // Map zone 1-5 to channel index 0-4
+        if (disruptIdx >= 0 && disruptIdx < 6) {
+          for (let i = 0; i < 6; i++) {
+            if (i === disruptIdx) {
+              for (let j = 0; j < 6; j++) {
+                if (i !== j) {
+                  baseMatrix[i][j] = -0.75 - Math.random() * 0.15;
+                  baseMatrix[j][i] = baseMatrix[i][j];
+                }
+              }
+            }
+          }
+        }
+      }
+
       const newPredictionData = {
         leak_detected: isLeak,
-        confidence: confidence,
-        suspected_zone: isLeak ? "Acoustic Leak Detected" : "No Leak / Healthy",
-        suspected_zone_idx: isLeak ? 2 : 0, // default to Zone 2 or 0
-        zone_probabilities: isLeak ? [0.1, 0.1, 0.8, 0.0, 0.0, 0.0] : [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        severity: isLeak ? (confidence > 0.85 ? "CRITICAL" : (confidence > 0.7 ? "MEDIUM" : "SMALL")) : "NONE",
-        flow_loss_pct: isLeak ? (confidence > 0.85 ? 15.0 : (confidence > 0.7 ? 8.0 : 2.0)) : 0.0,
+        confidence: mockConfidence,
+        suspected_zone: isLeak ? ZONE_NAMES[zoneIdx] : ZONE_NAMES[0],
+        suspected_zone_idx: isLeak ? zoneIdx : 0,
+        zone_probabilities: zoneProbs,
+        severity: severity,
+        flow_loss_pct: flowLossPct,
         go_no_go: isLeak ? "NO-GO" : "GO",
-        recommended_action: isLeak 
-          ? `Acoustic Analysis: High-frequency leak noise signatures detected in engine sound. Inspect turbocharger, boost pipes, and manifolds immediately.`
-          : "Acoustic Analysis: Engine sound pattern is normal. System healthy.",
-        residuals: {
-          res_MAF: isLeak ? -50.0 : 0.0,
-          res_MAP_boost: isLeak ? -15.0 : 0.0,
-          res_T_boost: isLeak ? 10.0 : 0.0,
-          res_T_cac_out: 0.0,
-          res_MAP_cac_out: 0.0,
-          res_T_exh_manifold: 0.0,
-          res_T_post_turbine: 0.0,
-          res_dP_dpf: 0.0,
-          res_MAP_intake: 0.0
-        },
+        recommended_action: actionMap[isLeak ? zoneIdx : 0],
+        residuals: baseResiduals,
         sensors: {
           ...manualSensors,
-          RPM: manualSensors.RPM,
+          RPM: selectedFile.includes('1200') ? 1200 :
+               selectedFile.includes('1400') ? 1400 :
+               selectedFile.includes('1600') ? 1600 :
+               selectedFile.includes('1800') ? 1800 :
+               selectedFile.includes('2000') ? 2000 : manualSensors.RPM,
         },
         energy_field: {
-          matrix: isLeak ? Array(6).fill(Array(6).fill(0.5)) : Array(6).fill(Array(6).fill(0.0)),
-          global_deviation: isLeak ? 4.5 : 0.5,
-          cosine_similarity: isLeak ? 0.85 : 0.98,
-          most_disrupted_sensor: isLeak ? "MAF" : "N/A",
-          ef_suspected_zone: isLeak ? "Zone 2" : "N/A"
+          matrix: baseMatrix,
+          global_deviation: isLeak ? (3.5 + flowLossPct * 0.2) : 0.4,
+          cosine_similarity: isLeak ? (0.85 - flowLossPct * 0.015) : 0.98,
+          most_disrupted_sensor: isLeak ? disruptedSensorMap[zoneIdx] : "N/A",
+          ef_suspected_zone: isLeak ? ZONE_NAMES[zoneIdx] : "N/A"
         }
       };
 
@@ -911,7 +1201,7 @@ function App() {
     confidence: 0,
     suspected_zone: ZONE_NAMES[0],
     suspected_zone_idx: 0,
-    zone_probabilities: [1, 0, 0, 0, 0, 0],
+    zone_probabilities: [1, 0, 0, 0, 0, 0, 0],
     severity: 'NONE',
     flow_loss_pct: 0,
     go_no_go: 'GO',
@@ -958,13 +1248,34 @@ function App() {
                 {isDemoRunning ? 'Stop Demo' : 'Start Live Demo'}
               </button>
 
+              {daqStatus === 'Connected' ? (
+                <button
+                  id="daq-toggle"
+                  className="demo-btn danger active"
+                  onClick={handleDisconnectDAQ}
+                >
+                  🛑 DISCONNECT STREAM
+                </button>
+              ) : (
+                <button
+                  id="daq-toggle"
+                  className="demo-btn active"
+                  style={{ borderColor: 'var(--accent-yellow)', color: 'var(--accent-yellow)', background: 'rgba(252,212,65,0.1)' }}
+                  onClick={handleConnectDAQ}
+                  disabled={daqStatus === 'Connecting'}
+                >
+                  {daqStatus === 'Connecting' ? 'Connecting...' : '⚡ INITIALIZE DAQ LINK'}
+                </button>
+              )}
+
               <select className="demo-select" value={simZone} onChange={e => setSimZone(Number(e.target.value))}>
                 <option value={0}>Healthy (No Leak)</option>
                 <option value={1}>Zone 1 — Intake</option>
                 <option value={2}>Zone 2 — Charge Air</option>
                 <option value={3}>Zone 3 — CAC/Manifold</option>
                 <option value={4}>Zone 4 — Exhaust</option>
-                <option value={5}>Zone 5 — DPF/SCR</option>
+                <option value={5}>Zone 5 — DPF</option>
+                <option value={6}>Zone 6 — SCR/Tailpipe</option>
               </select>
 
               <select className="demo-select" value={simSeverity} onChange={e => setSimSeverity(Number(e.target.value))}>

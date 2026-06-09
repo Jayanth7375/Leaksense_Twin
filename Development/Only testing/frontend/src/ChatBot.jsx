@@ -135,7 +135,7 @@ export default function ChatBot() {
         {/* Quick suggestion chips */}
         {chatHistory.length <= 1 && !isLoading && (
           <div className="chat-suggestions">
-            {['What are the 5 leak zones?', 'Explain Energy Field', 'Current sensor status'].map(q => (
+            {['What are the 6 leak zones?', 'Explain Energy Field', 'Current sensor status'].map(q => (
               <button
                 key={q}
                 className="chat-chip"

@@ -37,7 +37,17 @@ class DAXEngine:
         # Create empty tables so measures can be registered
         self.conn.execute('''
             CREATE TABLE IF NOT EXISTS SensorReadings (
-                timestamp VARCHAR, maf DOUBLE, map_boost DOUBLE, t_cac_out DOUBLE, t_boost DOUBLE, is_steady_state INT
+                Timestamp VARCHAR,
+                RPM DOUBLE,
+                MAF DOUBLE,
+                Boost DOUBLE,
+                CoolantTemp DOUBLE,
+                OilTemp DOUBLE,
+                OilPressure DOUBLE,
+                ThrottlePosition DOUBLE,
+                AFR DOUBLE,
+                LeakZone INT,
+                HealthScore DOUBLE
             );
             CREATE TABLE IF NOT EXISTS LeakEvents (
                 detected_at VARCHAR, timestamp VARCHAR, go_no_go VARCHAR, confidence DOUBLE, 
@@ -63,12 +73,17 @@ class DAXEngine:
             ts = item.get('timestamp')
             sensors = item.get('sensors', {})
             readings.append({
-                'timestamp': ts,
-                'maf': sensors.get('MAF', 0),
-                'map_boost': sensors.get('MAP_boost', 0),
-                't_cac_out': sensors.get('T_cac_out', 0),
-                't_boost': sensors.get('T_boost', 0),
-                'is_steady_state': 1
+                'Timestamp': ts,
+                'RPM': sensors.get('RPM', 0.0),
+                'MAF': sensors.get('MAF', 0.0),
+                'Boost': sensors.get('MAP_boost', 0.0),
+                'CoolantTemp': sensors.get('T_cac_out', 0.0),
+                'OilTemp': sensors.get('T_boost', 0.0),
+                'OilPressure': sensors.get('MAP_intake', 0.0),
+                'ThrottlePosition': sensors.get('fuel_qty', 0.0),
+                'AFR': 16.5,
+                'LeakZone': int(item.get('suspected_zone_idx', 0)),
+                'HealthScore': round(100.0 - (item.get('confidence', 0.0) * 100.0), 1)
             })
             
             events.append({
@@ -210,6 +225,16 @@ class DAXEngine:
 
         # ── 6. COUNTX without FILTER ──────────────────────────────────────────
         sql = re.sub(r'COUNTX\((\w+),\s*\d+\)', r'SELECT COUNT(*) AS result FROM \1', sql)
+
+        # ── COUNTROWS with FILTER ─────────────────────────────────────────────
+        sql = re.sub(
+            r'COUNTROWS\(FILTER\((\w+),\s*(.+?)\)\)',
+            r'SELECT COUNT(*) AS result FROM \1 WHERE \2',
+            sql, flags=re.DOTALL
+        )
+
+        # ── COUNTROWS without FILTER ──────────────────────────────────────────
+        sql = re.sub(r'COUNTROWS\((\w+)\)', r'SELECT COUNT(*) AS result FROM \1', sql)
 
         # ── 7. MAXX with FILTER ───────────────────────────────────────────────
         sql = re.sub(

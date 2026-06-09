@@ -2,7 +2,7 @@
 LeakSense Twin — Synthetic Data Generator
 Generates 50,000+ training samples for Cat C18 engine:
   - 40,000 healthy baseline samples
-  - 10,000 fault samples (5 zones × 3 severities)
+  - 10,000 fault samples (6 zones × 3 severities)
 Uses physics equations from C18 torque/power curve.
 """
 
@@ -149,10 +149,14 @@ def inject_leak(sample: dict, zone: int, severity: int) -> dict:
         s['T_dpf_in'] *= (1.0 - leak_fraction * 0.2)
 
     elif zone == 5:
-        # Zone E: DPF/SCR area
-        s['dP_dpf'] *= (1.0 - leak_fraction * 0.6)
-        s['T_dpf_out'] *= (1.0 - leak_fraction * 0.15)
-        s['T_dpf_in'] *= (1.0 - leak_fraction * 0.1)
+        # Zone E: DPF area
+        s['dP_dpf'] *= (1.0 - leak_fraction * 0.7)
+        s['T_dpf_in'] *= (1.0 - leak_fraction * 0.15)
+
+    elif zone == 6:
+        # Zone F: SCR/Tailpipe area
+        s['T_dpf_out'] *= (1.0 - leak_fraction * 0.25)
+        s['dP_dpf'] *= (1.0 - leak_fraction * 0.2)  # slight backpressure drop
 
     return s
 
@@ -219,7 +223,7 @@ def generate_dataset(n_healthy: int = 40000, n_fault_per_combo: int = 667,
 
     # Fault samples: 5 zones × 3 severities
     print("Generating fault samples...")
-    for zone in range(1, 6):
+    for zone in range(1, 7):
         for severity in range(1, 4):
             for i in range(n_fault_per_combo):
                 rpm = np.random.choice(rpm_range) + np.random.uniform(-25, 25)
@@ -245,7 +249,7 @@ def generate_dataset(n_healthy: int = 40000, n_fault_per_combo: int = 667,
     print(f"Dataset generated: {len(df)} samples")
     print(f"  Healthy: {(df['leak_zone'] == 0).sum()}")
     print(f"  Fault:   {(df['leak_zone'] > 0).sum()}")
-    for z in range(1, 6):
+    for z in range(1, 7):
         print(f"    Zone {z}: {(df['leak_zone'] == z).sum()}")
 
     return df

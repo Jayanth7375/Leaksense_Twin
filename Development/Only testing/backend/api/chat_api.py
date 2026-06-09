@@ -41,12 +41,13 @@ FALLBACK_KB = {
         "inter-sensor relationships. Severity: SMALL (<5%), MEDIUM (5–12%), CRITICAL (>12% flow loss)."
     ),
     "zone": (
-        "There are 5 leak zones:\n"
+        "There are 6 leak zones:\n"
         "Zone 1 — Intake: between airflow meter and compressor inlet (key sensor: MAF)\n"
         "Zone 2 — Charge Air: compressor outlet to CAC inlet (key sensor: MAP_boost, T_boost)\n"
         "Zone 3 — CAC/Manifold: CAC outlet to intake manifold (key sensor: MAP_cac_out, T_cac_out)\n"
         "Zone 4 — Exhaust Manifold: manifold to turbo turbine (key sensor: T_exh_manifold)\n"
-        "Zone 5 — DPF/SCR: aftertreatment system (key sensor: dP_dpf, T_dpf_out)"
+        "Zone 5 — DPF: Diesel Particulate Filter (key sensor: dP_dpf)\n"
+        "Zone 6 — SCR/Tailpipe: Selective Catalytic Reduction (key sensor: T_dpf_out)"
     ),
     "sensor": (
         "The system monitors 13 SAE J1939 sensors at 1 Hz: RPM, MAF (kg/h), MAP_intake, "

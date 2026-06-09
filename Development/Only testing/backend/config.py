@@ -60,14 +60,15 @@ ZONE_NAMES = [
     "Zone 2 — Charge Air (Post-compressor → CAC inlet)",
     "Zone 3 — CAC/Manifold (CAC → Intake manifold)",
     "Zone 4 — Exhaust Manifold (Manifold → Turbo turbine)",
-    "Zone 5 — DPF/SCR (Aftertreatment system)"
+    "Zone 5 — DPF (Diesel Particulate Filter)",
+    "Zone 6 — SCR/Tailpipe (Selective Catalytic Reduction)"
 ]
 
 # ─── ML Model Hyperparameters ─────────────────────────────────────────────────
 ML_CONFIG = {
     "input_dim": 31,
     "hidden_dim": 64,
-    "n_classes": 6,
+    "n_classes": 7,
     "dropout": 0.3,
     "learning_rate": 1e-3,
     "weight_decay": 1e-4,

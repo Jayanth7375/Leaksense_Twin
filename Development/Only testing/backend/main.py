@@ -62,7 +62,31 @@ async def lifespan(app: FastAPI):
 
     # Initialize DAX Engine
     from dax.engine import DAXEngine
-    app.state.dax = DAXEngine()
+    dax_engine = DAXEngine()
+    app.state.dax = dax_engine
+
+    # Initialize DAQ Service
+    from dax.daq_service import DAQService
+    daq_service = DAQService()
+    app.state.daq_service = daq_service
+
+    # DAQ WebSocket Broadcast Setup
+    active_daq_websockets = set()
+    app.state.active_daq_websockets = active_daq_websockets
+
+    async def daq_broadcast(message):
+        if active_daq_websockets:
+            safe_msg = _to_json_safe(message)
+            tasks = []
+            for ws in list(active_daq_websockets):
+                try:
+                    tasks.append(ws.send_json(safe_msg))
+                except Exception:
+                    active_daq_websockets.discard(ws)
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+    app.state.daq_broadcast = daq_broadcast
 
     async def refresh_dax_task():
         while True:
@@ -154,7 +178,8 @@ class UnifiedPredictor:
                            map_location='cpu', weights_only=True))
             self.leak_net.eval()
 
-            self.loc_net = LeakLocalizationNet(input_dim=input_dim, n_classes=6)
+            n_classes = self.config.get('n_classes', 7)
+            self.loc_net = LeakLocalizationNet(input_dim=input_dim, n_classes=n_classes)
             self.loc_net.load_state_dict(
                 torch.load(os.path.join(MODELS_DIR, "leak_localization_net.pth"),
                            map_location='cpu', weights_only=True))
@@ -262,7 +287,7 @@ class UnifiedPredictor:
         # ── ML Prediction ─────────────────────────────────────────────────
         confidence = 0.5
         zone_idx = 0
-        zone_probs = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        zone_probs = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
         try:
             if self.scaler is not None:
@@ -322,7 +347,8 @@ class UnifiedPredictor:
             2: "Check boost pipe connections between compressor outlet and CAC inlet. Inspect for cracked charge pipes.",
             3: "Inspect CAC-to-intake manifold connections. Check CAC end tanks and pipe clamps.",
             4: "Inspect exhaust manifold gaskets and V-band clamps. Check turbocharger turbine housing bolts.",
-            5: "Inspect DPF/SCR connections. Check DOC mounting bolts and exhaust pipe V-bands.",
+            5: "Inspect DPF inlet connections. Check DOC mounting bolts and exhaust pipe V-bands.",
+            6: "Inspect SCR/Tailpipe connections. Check SCR outlet connections and exhaust tailpipe clamping.",
         }
 
         # ── Build response ────────────────────────────────────────────────
@@ -617,6 +643,23 @@ async def websocket_demo(ws: WebSocket):
         print("  Demo WebSocket disconnected")
     except Exception as e:
         print(f"  Demo error: {e}")
+
+@app.websocket("/ws/daq")
+async def websocket_daq(ws: WebSocket):
+    """Real-time DAQ stream WebSocket."""
+    await ws.accept()
+    app.state.active_daq_websockets.add(ws)
+    print("  DAQ WebSocket client connected")
+    try:
+        while True:
+            # Just keep connection open, client listens
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        app.state.active_daq_websockets.discard(ws)
+        print("  DAQ WebSocket client disconnected")
+    except Exception as e:
+        app.state.active_daq_websockets.discard(ws)
+        print(f"  DAQ WebSocket error: {e}")
 
 
 # ─── Run ──────────────────────────────────────────────────────────────────────

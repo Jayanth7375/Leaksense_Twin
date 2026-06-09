@@ -352,13 +352,13 @@ body {
 }
 
 .go-indicator {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: linear-gradient(180deg, var(--bg-card) 0%, rgba(16, 185, 129, 0.05) 100%);
+  border-color: var(--accent-emerald);
+  background: #000000 !important;
 }
 
 .nogo-indicator {
-  border-color: rgba(239, 68, 68, 0.3);
-  background: linear-gradient(180deg, var(--bg-card) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border-color: var(--accent-red);
+  background: #000000 !important;
   animation: alertPulse 1.5s ease-in-out infinite;
 }
 
@@ -389,6 +389,8 @@ body {
 /* ── Confidence Meter ──────────────────────────────────────────── */
 .confidence-card {
   grid-column: span 1;
+  background: #000000 !important;
+  border-color: var(--border-medium);
 }
 
 .confidence-ring {
@@ -436,6 +438,8 @@ body {
 /* ── Leak Alert Card ───────────────────────────────────────────── */
 .alert-card {
   grid-column: span 2;
+  background: #000000 !important;
+  border-color: var(--border-medium);
 }
 
 .alert-content {
@@ -756,14 +760,32 @@ body {
 }
 
 .engine-zone.healthy {
-  border-color: rgba(16, 185, 129, 0.3);
-  background: rgba(16, 185, 129, 0.05);
+  border-color: var(--accent-emerald) !important;
+  background: #000000 !important;
+}
+
+.engine-zone.healthy .engine-zone-name {
+  color: var(--accent-emerald) !important;
+}
+
+.engine-zone.healthy .engine-zone-desc {
+  color: rgba(16, 185, 129, 0.8) !important;
 }
 
 .engine-zone.leak {
-  border-color: rgba(239, 68, 68, 0.5);
-  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--accent-red) !important;
+  background: #000000 !important;
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
   animation: alertPulse 1.5s ease-in-out infinite;
+}
+
+.engine-zone.leak .engine-zone-name {
+  color: var(--accent-red) !important;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+}
+
+.engine-zone.leak .engine-zone-desc {
+  color: rgba(239, 68, 68, 0.8) !important;
 }
 
 .engine-zone-name {
@@ -895,6 +917,12 @@ body {
 
 .demo-select:focus {
   border-color: var(--accent-cyan);
+}
+
+.demo-select option,
+select option {
+  background-color: #121212 !important;
+  color: #ffffff !important;
 }
 
 /* ── Animations ────────────────────────────────────────────────── */
