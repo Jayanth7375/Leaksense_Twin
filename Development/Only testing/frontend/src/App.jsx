@@ -2,6 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import './index.css'
 import DAXConsole from './DAXConsole'
 import ChatBot from './ChatBot'
+import ZoneModel3D from './ZoneModel3D'
+
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/blocks/sidebar"
+import { AppSidebar } from "@/components/blocks/whatsapp-sidebar"
 
 // ─── Intro Video Component ──────────────────────────────────────
 function IntroVideo({ onComplete }) {
@@ -25,20 +29,179 @@ function IntroVideo({ onComplete }) {
   );
 }
 
-const API_BASE = 'http://localhost:8000'
-const WS_BASE = 'ws://localhost:8000'
+const API_BASE = 'http://127.0.0.1:8000'
+const WS_BASE = 'ws://127.0.0.1:8000'
 
 const ZONE_NAMES = [
   'No Leak / Healthy',
-  'Zone 1 — Intake',
-  'Zone 2 — Charge Air',
-  'Zone 3 — CAC/Manifold',
-  'Zone 4 — Exhaust Manifold',
-  'Zone 5 — DPF',
-  'Zone 6 — SCR/Tailpipe',
+  'Zone 1 - Intake',
+  'Zone 2 - Charge Air',
+  'Zone 3 - CAC/Manifold',
+  'Zone 4 - Exhaust Manifold',
+  'Zone 5 - DPF',
+  'Zone 6 - SCR/Tailpipe',
 ]
 
 const EF_CHANNELS = ['MAF', 'MAP_boost', 'MAP_cac_out', 'T_cac_out', 'T_exh', 'dP_dpf']
+
+const ZONE_DETAIL_INFO = {
+  1: {
+    title: 'Zone 1 - Intake',
+    subtitle: 'Airflow Meter → Compressor Inlet',
+    description: 'The intake zone covers the air path from the mass airflow meter through ducting to the turbocharger compressor inlet. Leaks here cause unmetered air ingestion, MAF under-reading, and reduced boost pressure across the entire air system.',
+    affected_sensors: ['MAF', 'MAP_intake', 'MAP_boost'],
+    inspection_steps: [
+      'Inspect intake ducting between airflow meter and compressor inlet for cracks or loose clamps',
+      'Check all silicone couplers and hose clamps on the intake path',
+      'Inspect the MAF sensor housing for cracks or loose mounting',
+      'Verify intake pre-cleaner and air filter housing seals are intact',
+      'Check turbocharger compressor inlet elbow for hairline cracks',
+    ],
+    recommendation: {
+      method: 'Acoustic Leak Detection',
+      priority: 'High',
+      actions: [
+        'Perform acoustic scan along intake ducting from MAF sensor housing to turbo compressor inlet while engine is under load',
+        'Apply soapy water solution to all coupler joints and hose clamps — watch for steady bubbling that confirms active leak points',
+        'Temporarily seal suspected sections one at a time and monitor MAF sensor reading recovery in real time',
+        'Record MAF and MAP_intake values before and after each isolation to pinpoint the exact leak source',
+      ],
+      follow_up: 'After repair, re-run acoustic analysis and verify MAF reading returns to within ±3% of baseline. Confirm boost pressure recovers to spec and log repair in C18 maintenance record.',
+    },
+    icon: '🌬️',
+    colorVar: 'var(--accent-yellow)',
+  },
+  2: {
+    title: 'Zone 2 - Charge Air',
+    subtitle: 'Compressor Outlet → CAC Inlet',
+    description: 'The charge air zone spans the high-pressure boost pipe from the turbocharger compressor outlet to the charge air cooler inlet. Boost pressure leaks here reduce intercooler efficiency and engine output significantly.',
+    affected_sensors: ['MAP_boost', 'T_boost', 'MAP_cac_in'],
+    inspection_steps: [
+      'Inspect charge pipe from turbo compressor to CAC inlet for cracks or pinholes',
+      'Check all V-band clamps and coupler connections on charge pipes',
+      'Inspect the charge air cooler inlet tank for cracks or weld failures',
+      'Verify all boost pressure test ports are securely capped',
+      'Inspect intercooler end-tank welds under boost pressure with soapy water',
+    ],
+    recommendation: {
+      method: 'Boost Pressure Test',
+      priority: 'High',
+      actions: [
+        'Pressurize the charge air system to rated boost (200 kPa) using a regulated air source on a cold engine and hold for 30 seconds',
+        'Inspect charge pipe welds, V-band clamps, and coupler connections from compressor outlet to CAC inlet using soapy water',
+        'Check intercooler inlet end-tank welds and casting seams for bubble formation under test pressure',
+        'Verify all boost test port caps and MAP sensor fittings are tight — these are common overlooked leak paths',
+      ],
+      follow_up: 'Post-repair, perform a road test under full load and monitor MAP_boost for stable, consistent pressure matching pre-fault baseline. Update boost system service record.',
+    },
+    icon: '💨',
+    colorVar: 'var(--accent-yellow)',
+  },
+  3: {
+    title: 'Zone 3 - CAC/Manifold',
+    subtitle: 'CAC Outlet → Intake Manifold',
+    description: 'This zone covers the post-intercooler path from CAC outlet through charge pipes to the intake manifold. Leaks here cause significant power loss, elevated exhaust temperatures, and high fuel consumption.',
+    affected_sensors: ['MAP_cac_out', 'T_cac_out', 'MAP_intake'],
+    inspection_steps: [
+      'Inspect CAC outlet pipe and coupler connections to the intake manifold',
+      'Check intake manifold gaskets and mounting bolts for correct torque',
+      'Inspect CAC outlet tank end caps for cracks or separation',
+      'Check all charge pipe clamps from CAC outlet to intake manifold',
+      'Perform a full boost leak test on the intake system from compressor to manifold',
+    ],
+    recommendation: {
+      method: 'Pressure & Acoustic Test',
+      priority: 'High',
+      actions: [
+        'Conduct a boost leak test from CAC outlet to intake manifold at 150 kPa — isolate this segment by blocking the compressor outlet',
+        'Inspect CAC outlet coupler, all charge-to-manifold pipe joints, and clamp positions for signs of blow-by or soot deposits',
+        'Check intake manifold gaskets for carbon tracking; torque all manifold bolts to Cat C18 spec (35 Nm) in the correct sequence',
+        'Compare MAP_cac_out against MAP_boost live data — a gap exceeding 8 kPa under load confirms a post-CAC leak',
+      ],
+      follow_up: 'Clear all fault codes, run a full DTC scan after repair, and verify the boost system holds test pressure for 30 seconds minimum. Confirm T_cac_out drops to within normal operating range.',
+    },
+    icon: '🔧',
+    colorVar: 'var(--accent-yellow)',
+  },
+  4: {
+    title: 'Zone 4 - Exhaust Manifold',
+    subtitle: 'Exhaust Ports → Turbine Inlet',
+    description: 'Covers the hot exhaust gas path from the engine exhaust ports through the exhaust manifold to the turbocharger turbine inlet. Exhaust leaks reduce turbine energy, increase underhood temperatures, and risk EGR system contamination.',
+    affected_sensors: ['T_exh_manifold', 'MAP_boost'],
+    inspection_steps: [
+      'Inspect exhaust manifold gaskets — look for carbon tracking or blow-by marks around ports',
+      'Check exhaust manifold mounting bolts for proper torque (Cat spec: 55 Nm)',
+      'Inspect V-band clamp at turbine inlet for cracks or loose fasteners',
+      'Check turbocharger turbine housing bolts and gasket condition',
+      'Inspect exhaust crossover pipes and flanges for thermal cracking',
+    ],
+    recommendation: {
+      method: 'Thermal & Visual Inspection',
+      priority: 'Immediate',
+      actions: [
+        'Perform a thermal imaging scan of the exhaust manifold and turbine inlet during engine warm-up — hot spots above 650°C indicate active gas escape',
+        'Inspect all manifold gaskets for carbon blow-by traces; apply Cat Dye Penetrant if visual inspection is inconclusive on hairline cracks',
+        'Torque all exhaust manifold bolts to Cat C18 spec (55 Nm) in the correct crossing sequence; replace any stretched or seized fasteners',
+        'Inspect the turbocharger turbine inlet V-band clamp and housing bolts — a loose V-band is a common high-energy leak point on C18 engines',
+      ],
+      follow_up: 'After repair, allow engine to reach full operating temperature and re-run thermal scan. Confirm exhaust temperatures normalize and EGR delta pressure returns to baseline within two drive cycles.',
+    },
+    icon: '🔥',
+    colorVar: 'var(--accent-red)',
+  },
+  5: {
+    title: 'Zone 5 - DPF',
+    subtitle: 'Diesel Particulate Filter Assembly',
+    description: 'The aftertreatment zone covers the diesel oxidation catalyst (DOC) and diesel particulate filter (DPF). A drop in differential pressure across the DPF indicates bypass leaks, filter damage, or housing seal failure.',
+    affected_sensors: ['dP_dpf', 'T_dpf_in', 'T_dpf_out'],
+    inspection_steps: [
+      'Check DPF differential pressure sensor hoses and fittings for cracks or disconnections',
+      'Inspect DPF mounting V-bands and inlet/outlet gaskets for exhaust blow-by',
+      'Check DOC-to-DPF coupling clamp for tightness and gasket condition',
+      'Verify DPF inlet and outlet temperature sensors are reading expected values',
+      'Inspect aftertreatment housing welds and mounting brackets for cracks',
+    ],
+    recommendation: {
+      method: 'Differential Pressure & Visual Audit',
+      priority: 'High',
+      actions: [
+        'Inspect dP_dpf sensor hoses and pressure port fittings for cracks, kinks, or disconnection — a broken hose alone will cause false low-dP readings',
+        'Check DPF inlet and outlet V-band clamps and gasket interfaces for visible soot blow-by marks, which confirm exhaust is bypassing the filter',
+        'Inspect the DOC-to-DPF coupling clamp interface under a thermal camera during warm-up — a cool joint relative to adjacent housing confirms bypass leakage',
+        'Verify the temperature differential between T_dpf_in and T_dpf_out falls within expected range (±40°C at rated load); abnormal delta indicates flow disruption',
+      ],
+      follow_up: 'After repair, initiate a forced DPF active regeneration cycle and monitor dP_dpf during regen. Confirm differential pressure returns to baseline within two regen cycles and soot load % drops to normal.',
+    },
+    icon: '🏭',
+    colorVar: 'var(--accent-cyan)',
+  },
+  6: {
+    title: 'Zone 6 - SCR/Tailpipe',
+    subtitle: 'SCR Catalyst → Exhaust Outlet',
+    description: 'Covers the selective catalytic reduction (SCR) system and tailpipe. Leaks here reduce SCR catalyst efficiency, can cause DEF injection anomalies, and alter exhaust backpressure readings used by the ECM.',
+    affected_sensors: ['T_dpf_out'],
+    inspection_steps: [
+      'Inspect SCR inlet and outlet V-band clamps and gaskets for exhaust leaks',
+      'Check DEF injection nozzle housing seals and dosing module connections',
+      'Inspect tailpipe flex joint and end-pipe mounting clamps',
+      'Check exhaust silencer connections and end-pipe seals',
+      'Verify no aftertreatment bypass valve is partially open or stuck',
+    ],
+    recommendation: {
+      method: 'Acoustic Analysis + DEF System Audit',
+      priority: 'High',
+      actions: [
+        'Perform an acoustic scan along the SCR housing, inlet and outlet V-band clamps, and expansion joints under normal operating load',
+        'Inspect DEF injection nozzle housing seals and dosing module mounting — crystallized DEF deposits around fittings indicate seal failure',
+        'Check tailpipe flex joint, end-pipe mounting clamps, and exhaust silencer connections for mechanical looseness or cracked welds',
+        'Verify no aftertreatment bypass valve is partially open, stuck, or leaking past the valve seat — even partial bypass drastically reduces SCR conversion efficiency',
+      ],
+      follow_up: 'After repair, clear all SCR-related fault codes and run two full drive cycles. Verify NOx sensor readings return to acceptable levels and DEF consumption rate normalizes. Update aftertreatment service interval log.',
+    },
+    icon: '🌿',
+    colorVar: 'var(--accent-cyan)',
+  },
+}
 
 const SENSOR_UNITS = {
   RPM: 'rpm', MAF: 'kg/h', MAP_intake: 'kPa', MAP_boost: 'kPa',
@@ -152,7 +315,7 @@ function ConfidenceRing({ confidence, leakDetected }) {
 }
 
 // ─── Leak Alert Card ─────────────────────────────────────────────
-function LeakAlertCard({ data }) {
+function LeakAlertCard({ data, onInspect }) {
   const getSeverityClass = (sev) => {
     const map = { NONE: 'severity-none', SMALL: 'severity-small', MEDIUM: 'severity-medium', CRITICAL: 'severity-critical' }
     return map[sev] || 'severity-none'
@@ -179,6 +342,22 @@ function LeakAlertCard({ data }) {
         <div className="alert-action">
           {data.recommended_action || 'System operating within normal parameters.'}
         </div>
+        {data.leak_detected && onInspect && (
+          <button
+            onClick={onInspect}
+            style={{
+              marginTop: '10px', width: '100%',
+              padding: '8px 12px', borderRadius: '6px',
+              background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)',
+              color: 'var(--accent-red)', fontSize: '0.8rem', fontWeight: '700',
+              cursor: 'pointer', transition: 'background 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.22)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.12)'}
+          >
+            Inspect Zone →
+          </button>
+        )}
       </div>
     </div>
   )
@@ -221,9 +400,9 @@ function EnergyFieldHeatmap({ efData }) {
       const b = Math.round(50 * (1 - v))
       return `rgb(${r}, ${g}, ${b})`
     } else {
-      const r = Math.round(252 * (1 + v))
-      const g = Math.round(212 * (1 + v))
-      const b = Math.round(65 * (1 + v))
+      const r = Math.round(255 * (1 + v))
+      const g = Math.round(192 * (1 + v))
+      const b = Math.round(0 * (1 + v))
       return `rgb(${r}, ${g}, ${b})`
     }
   }
@@ -340,7 +519,7 @@ function ZoneProbabilities({ probs }) {
       <div className="zone-bars">
         {ZONE_NAMES.map((name, i) => (
           <div className="zone-bar-item" key={i}>
-            <div className="zone-bar-label">{name.split('—')[0].trim()}</div>
+            <div className="zone-bar-label">{name.split(' - ')[0].trim()}</div>
             <div className="zone-bar-track">
               <div
                 className="zone-bar-fill"
@@ -348,9 +527,7 @@ function ZoneProbabilities({ probs }) {
                   width: `${(probArray[i] || 0) * 100}%`,
                   background: colors[i],
                 }}
-              >
-                {(probArray[i] || 0) > 0.1 ? `${((probArray[i] || 0) * 100).toFixed(0)}%` : ''}
-              </div>
+              />
             </div>
             <div className="zone-bar-value">{((probArray[i] || 0) * 100).toFixed(1)}%</div>
           </div>
@@ -381,23 +558,23 @@ function EngineDiagram({ zoneIdx, leakDetected, onZoneClick }) {
       </div>
       <div className="engine-diagram-grid">
         {/* Row 1: Zones 1 to 4 */}
-        <div className="grid-cell-1">{getZoneCard(1, 'Zone 1', 'Intake — Airflow meter → Compressor')}</div>
+        <div className="grid-cell-1">{getZoneCard(1, 'Zone 1', 'Intake - Airflow meter → Compressor')}</div>
         <div className="grid-arrow-1">→</div>
 
-        <div className="grid-cell-2">{getZoneCard(2, 'Zone 2', 'Charge Air — Compressor → CAC')}</div>
+        <div className="grid-cell-2">{getZoneCard(2, 'Zone 2', 'Charge Air - Compressor → CAC')}</div>
         <div className="grid-arrow-2">→</div>
 
-        <div className="grid-cell-3">{getZoneCard(3, 'Zone 3', 'CAC/Manifold — CAC → Intake ports')}</div>
+        <div className="grid-cell-3">{getZoneCard(3, 'Zone 3', 'CAC/Manifold - CAC → Intake ports')}</div>
         <div className="grid-arrow-3">→</div>
 
-        <div className="grid-cell-4">{getZoneCard(4, 'Zone 4', 'Exhaust — Manifold → Turbine')}</div>
+        <div className="grid-cell-4">{getZoneCard(4, 'Zone 4', 'Exhaust - Manifold → Turbine')}</div>
         <div className="grid-arrow-4">→</div>
 
         {/* Row 2: Zones 5 and 6 under Zone 2 and 3 */}
-        <div className="grid-cell-5">{getZoneCard(5, 'Zone 5', 'Aftertreatment — DPF')}</div>
+        <div className="grid-cell-5">{getZoneCard(5, 'Zone 5', 'Aftertreatment - DPF')}</div>
         <div className="grid-arrow-5">→</div>
 
-        <div className="grid-cell-6">{getZoneCard(6, 'Zone 6', 'Aftertreatment — SCR/Tailpipe')}</div>
+        <div className="grid-cell-6">{getZoneCard(6, 'Zone 6', 'Aftertreatment - SCR/Tailpipe')}</div>
       </div>
     </div>
   )
@@ -431,7 +608,7 @@ function HistoryTable({ history }) {
                 {item.leak_detected ? 'LEAK' : 'OK'}
               </td>
               <td>{(item.confidence * 100).toFixed(1)}%</td>
-              <td>{item.suspected_zone?.split('—')[0]?.trim() || '-'}</td>
+              <td>{item.suspected_zone?.split(' - ')[0]?.trim() || '-'}</td>
               <td>
                 <span className={`alert-severity ${item.severity === 'CRITICAL' ? 'severity-critical' :
                     item.severity === 'MEDIUM' ? 'severity-medium' :
@@ -529,6 +706,39 @@ function EnergyFieldGraph({ efData }) {
   )
 }
 
+function buildEnergyField(result, isLeak) {
+  const features = result?.features || {}
+  const leakProbability = typeof result?.leak_probability === 'number' ? result.leak_probability : 0
+  const healthyProbability = typeof result?.healthy_probability === 'number' ? result.healthy_probability : 1
+
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+  const bandFactor = clamp((features.band_4 || 0) * 4, 0, 1)
+  const centroidFactor = clamp((features.spectral_centroid || 0) / 8000, 0, 1)
+  const rmsFactor = clamp((features.rms || 0) * 2.5, 0, 1)
+  const crestFactor = clamp((features.crest_factor || 0) / 5, 0, 1)
+  const zeroCrossFactor = clamp((features.zero_crossings || 0) * 25, 0, 1)
+  const pulseFactor = clamp((isLeak ? leakProbability : healthyProbability) * 1.1, 0.05, 1)
+
+  const matrix = Array.from({ length: 6 }, (_, row) =>
+    Array.from({ length: 6 }, (_, col) => {
+      const base = (Math.sin((row + 1) * (col + 1) * 0.45 + (features.peak || 0) * 1.2) + 1) / 2
+      const weight = [rmsFactor, centroidFactor, crestFactor, zeroCrossFactor, bandFactor, pulseFactor][row] || 0.2
+      const value = (base * 0.55 + weight * 0.45) * (isLeak ? 1 : 0.35) - 0.15
+      return Number(clamp(value, -1, 1).toFixed(3))
+    })
+  )
+
+  const disruptedSensors = ['MAF', 'MAP_boost', 'T_exh_manifold']
+  const sensorIndex = Math.min(disruptedSensors.length - 1, Math.max(0, Math.floor((features.band_4 || 0) * 10)))
+
+  return {
+    matrix,
+    global_deviation: Number((1.2 + leakProbability * 4.5 + (features.band_4 || 0) * 2.5).toFixed(2)),
+    cosine_similarity: Number((0.96 - leakProbability * 0.18 - (features.spectral_centroid || 0) / 20000).toFixed(3)),
+    most_disrupted_sensor: isLeak ? disruptedSensors[sensorIndex] : 'N/A',
+  }
+}
+
 // ─── Acoustic Leak Detector Component ──────────────────────────────
 function AcousticLeakDetector({ 
   audioFiles, 
@@ -553,7 +763,7 @@ function AcousticLeakDetector({
     <div className="card acoustic-card">
       <div className="card-header">
         <span className="card-title">Acoustic Leak Detection</span>
-        <span className="card-icon">🔊</span>
+        <span className="card-icon"></span>
       </div>
       <div className="acoustic-container" style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '10px 0' }}>
         
@@ -603,67 +813,409 @@ function AcousticLeakDetector({
           onClick={analyzeSound}
           disabled={isLoading || !selectedFile}
         >
-          {isLoading ? 'Analyzing Audio Frequencies...' : '🔍 Analyze Audio Leak Signatures'}
+          {isLoading ? 'Analyzing Audio Frequencies...' : 'Analyze Audio Leak Signatures'}
         </button>
 
-        {acousticResult && (
-          <div className="acoustic-result-wrapper" style={{ animation: 'fadeIn 0.3s ease-in-out', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '5px' }}>
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between', 
-              padding: '12px', 
-              borderRadius: '8px',
-              border: '1px solid',
-              background: '#000000',
-              borderColor: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
-            }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Acoustic Classification</div>
-                <div style={{ 
-                  fontSize: '1.4rem', 
-                  fontWeight: '800', 
-                  color: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)' 
-                }}>
-                  {acousticResult.prediction}
+        {acousticResult && (() => {
+          const features = acousticResult.features || {};
+          const prediction = acousticResult.prediction || 'UNKNOWN';
+          const leakProbability = typeof acousticResult.leak_probability === 'number' ? acousticResult.leak_probability : 0;
+          const healthyProbability = typeof acousticResult.healthy_probability === 'number' ? acousticResult.healthy_probability : 0;
+          const confidence = prediction === 'LEAK' ? leakProbability : healthyProbability;
+          return (
+            <div className="acoustic-result-wrapper" style={{ animation: 'fadeIn 0.3s ease-in-out', display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '5px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid',
+                background: prediction === 'LEAK' ? 'rgba(239, 83, 80, 0.1)' : 'rgba(76, 175, 80, 0.1)',
+                borderColor: prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Acoustic Classification</div>
+                  <div style={{
+                    fontSize: '1.4rem',
+                    fontWeight: '800',
+                    color: prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
+                  }}>
+                    {prediction}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Probability</div>
+                  <div style={{
+                    fontSize: '1.4rem',
+                    fontWeight: '800',
+                    color: prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
+                  }}>
+                    {Math.round(confidence * 100)}%
+                  </div>
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Probability</div>
-                <div style={{ 
-                  fontSize: '1.4rem', 
-                  fontWeight: '800',
-                  color: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--accent-emerald)'
-                }}>
-                  {Math.round((acousticResult.prediction === 'LEAK' ? acousticResult.leak_probability : acousticResult.healthy_probability) * 100)}%
+
+              <div className="acoustic-features" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 15px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>RMS Energy:</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{(features.rms ?? 0).toFixed(4)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Peak Amp:</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{(features.peak ?? 0).toFixed(4)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Spectral Centroid:</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: 'var(--accent-yellow)' }}>{(features.spectral_centroid ?? 0).toFixed(0)} Hz</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Zero-Crossing Rate:</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{(features.zero_crossings ?? 0).toFixed(4)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gridColumn: 'span 2', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>High Frequency (4kHz+) Energy Ratio:</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--text-primary)' }}>{((features.band_4 ?? 0) * 1000).toFixed(2)}‰</span>
                 </div>
               </div>
             </div>
+          );
+        })()}
+      </div>
+    </div>
+  )
+}
 
-            <div className="acoustic-features" style={{ fontSize: '0.75rem', background: 'rgba(0,0,0,0.15)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>RMS Energy:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{acousticResult.features.rms.toFixed(4)}</span>
+// ─── Zone Detail Page ─────────────────────────────────────────────
+function ZoneDetailPage({ data, onBack }) {
+  const zoneIdx = data.suspected_zone_idx || 0
+  const info = ZONE_DETAIL_INFO[zoneIdx]
+
+  if (!info || zoneIdx === 0) {
+    return (
+      <div className="dashboard-grid">
+
+        {/* Header */}
+        <div className="card" style={{ gridColumn: 'span 3', padding: '22px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+            <button className="demo-btn" onClick={onBack} style={{ padding: '6px 14px', fontSize: '0.8rem', flexShrink: 0 }}>← Back</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-primary)' }}>Engine Health Report</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>Cat C18 — Zone Inspection Analysis</div>
+            </div>
+            <span style={{
+              padding: '5px 16px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: '800', letterSpacing: '0.07em',
+              background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.4)', color: 'var(--accent-emerald)',
+            }}>GO — ALL CLEAR</span>
+          </div>
+          <div style={{
+            marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)',
+            fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.65',
+          }}>
+            No anomalies detected across all monitored zones. The engine air system, exhaust path, and aftertreatment systems are operating within normal parameters. No immediate inspection or maintenance action is required.
+          </div>
+        </div>
+
+        {/* System Status */}
+        <div className="card" style={{ padding: '20px' }}>
+          <div className="card-header"><span className="card-title">System Status</span></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '16px' }}>
+            {[
+              { label: 'Operational Status', value: 'GO', color: 'var(--accent-emerald)' },
+              { label: 'Detected Flow Loss', value: '0.0%', color: 'var(--accent-emerald)' },
+              { label: 'Leak Confidence', value: `${Math.round((data.confidence || 0) * 100)}%`, color: 'var(--accent-emerald)' },
+            ].map(({ label, value, color }) => (
+              <div key={label}>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{label}</div>
+                <div style={{ fontSize: '1.9rem', fontWeight: '900', color }}>{value}</div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Peak Amp:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{acousticResult.features.peak.toFixed(4)}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Zone Clearance */}
+        <div className="card" style={{ padding: '20px' }}>
+          <div className="card-header"><span className="card-title">Zone Clearance</span></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+            {ZONE_NAMES.slice(1).map((zone, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '9px 12px',
+                background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.15)', borderRadius: '6px',
+              }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{zone}</span>
+                <span style={{ fontSize: '0.68rem', fontWeight: '800', color: 'var(--accent-emerald)', letterSpacing: '0.06em' }}>CLEAR</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Spectral Centroid:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: 'var(--accent-yellow)' }}>{acousticResult.features.spectral_centroid.toFixed(0)} Hz</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Maintenance Note — full-width horizontal */}
+        <div className="card" style={{ gridColumn: 'span 3', padding: '22px' }}>
+          <div className="card-header" style={{ marginBottom: '16px' }}><span className="card-title">Maintenance Note</span></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+
+            {/* Panel 1 — Status summary */}
+            <div style={{
+              padding: '16px 18px',
+              background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.25)', borderRadius: '8px',
+              display: 'flex', flexDirection: 'column', gap: '6px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--accent-emerald)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Current Status</div>
+              <div style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: '600', lineHeight: '1.55' }}>
+                Continue normal engine operation. All monitored zones are within specification.
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Zero-Crossing Rate:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{acousticResult.features.zero_crossings.toFixed(4)}</span>
+            </div>
+
+            {/* Panel 2 — Inspection schedule */}
+            <div style={{
+              padding: '16px 18px',
+              background: 'rgba(128,128,128,0.06)', border: '1px solid var(--border-subtle)', borderRadius: '8px',
+              display: 'flex', flexDirection: 'column', gap: '6px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Inspection Schedule</div>
+              <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                Schedule the next preventive inspection per the Cat C18 maintenance interval — every <strong style={{ color: 'var(--text-primary)' }}>500 operating hours</strong> or as directed by Cat ET diagnostics.
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gridColumn: 'span 2', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>High Frequency (4kHz+) Energy Ratio:</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold', color: acousticResult.prediction === 'LEAK' ? 'var(--accent-red)' : 'var(--text-primary)' }}>{(acousticResult.features.band_4 * 1000).toFixed(2)}‰</span>
+            </div>
+
+            {/* Panel 3 — Next action */}
+            <div style={{
+              padding: '16px 18px',
+              background: 'rgba(128,128,128,0.06)', border: '1px solid var(--border-subtle)', borderRadius: '8px',
+              display: 'flex', flexDirection: 'column', gap: '6px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Next Action</div>
+              <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                Log result and continue monitoring. Re-run analysis if any operational symptoms develop.
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    )
+  }
+
+  const getSeverityColor = (sev) => {
+    const map = { NONE: 'var(--accent-emerald)', SMALL: 'var(--accent-yellow)', MEDIUM: 'var(--accent-yellow)', CRITICAL: 'var(--accent-red)' }
+    return map[sev] || 'var(--accent-emerald)'
+  }
+
+  const getSeverityClass = (sev) => {
+    const map = { NONE: 'severity-none', SMALL: 'severity-small', MEDIUM: 'severity-medium', CRITICAL: 'severity-critical' }
+    return map[sev] || 'severity-none'
+  }
+
+  return (
+    <div className="dashboard-grid">
+      {/* Zone header banner */}
+      <div className="card" style={{ gridColumn: 'span 3', padding: '24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <button className="demo-btn" onClick={onBack} style={{ padding: '6px 14px', fontSize: '0.8rem', flexShrink: 0 }}>
+            ← Back
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '1.35rem', fontWeight: '900', color: info.colorVar }}>{info.title}</div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{info.subtitle}</div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <span className={`alert-severity ${getSeverityClass(data.severity)}`}>{data.severity || 'NONE'}</span>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>
+              Detection Confidence: {Math.round(data.confidence * 100)}%
+            </div>
+          </div>
+        </div>
+        <div style={{
+          marginTop: '18px', paddingTop: '16px',
+          borderTop: '1px solid var(--border-subtle)',
+          color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: '1.65',
+        }}>
+          {info.description}
+        </div>
+      </div>
+
+      {/* 3D Zone Model */}
+      <div className="card" style={{ padding: '12px', overflow: 'hidden' }}>
+        <div className="card-header" style={{ marginBottom: '10px' }}>
+          <span className="card-title">3D Zone Model</span>
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '8px' }}>360° Interactive</span>
+        </div>
+        <ZoneModel3D zoneId={zoneIdx} height={260} />
+      </div>
+
+      {/* Leak metrics */}
+      <div className="card" style={{ padding: '20px' }}>
+        <div className="card-header"><span className="card-title">Leak Metrics</span></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '14px' }}>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estimated Flow Loss</div>
+            <div style={{ fontSize: '2rem', fontWeight: '900', color: getSeverityColor(data.severity) }}>
+              {(data.flow_loss_pct || 0).toFixed(1)}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confidence</div>
+            <div style={{ fontSize: '2rem', fontWeight: '900', color: 'var(--accent-yellow)' }}>
+              {Math.round(data.confidence * 100)}%
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Go / No-Go</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: '900', color: data.go_no_go === 'GO' ? 'var(--accent-emerald)' : 'var(--accent-red)' }}>
+              {data.go_no_go}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Affected sensors */}
+      <div className="card" style={{ padding: '20px' }}>
+        <div className="card-header"><span className="card-title">Affected Sensors</span></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+          {info.affected_sensors.map(sensor => {
+            const val = data.sensors?.[sensor]
+            const residual = data.residuals?.[`res_${sensor}`]
+            return (
+              <div key={sensor} style={{
+                padding: '10px 12px', background: 'rgba(128,128,128,0.07)',
+                borderRadius: '7px', border: '1px solid var(--border-subtle)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+                    {sensor.replace(/_/g, ' ')}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent-yellow)' }}>
+                    {typeof val === 'number' ? val.toFixed(1) : '—'} {SENSOR_UNITS[sensor] || ''}
+                  </span>
+                </div>
+                {typeof residual === 'number' && residual !== 0 && (
+                  <div style={{
+                    fontSize: '0.7rem', marginTop: '4px',
+                    color: residual < 0 ? 'var(--accent-red)' : 'var(--accent-emerald)',
+                  }}>
+                    Residual: {residual > 0 ? '+' : ''}{residual.toFixed(2)} &nbsp;
+                    {residual < 0 ? '↓ Below expected' : '↑ Above expected'}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Recommended action — full-width horizontal layout */}
+      <div className="card" style={{ gridColumn: 'span 3', padding: '22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' }}>
+          <span className="card-title">Recommended Action</span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{
+              padding: '3px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700',
+              background: 'rgba(128,128,128,0.12)', border: '1px solid var(--border-subtle)',
+              color: 'var(--text-secondary)', letterSpacing: '0.04em',
+            }}>
+              {info.recommendation.method}
+            </span>
+            <span style={{
+              padding: '3px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700',
+              background: info.recommendation.priority === 'Immediate'
+                ? 'rgba(239,68,68,0.13)' : info.recommendation.priority === 'High'
+                ? 'rgba(255,192,0,0.13)' : 'rgba(34,211,238,0.13)',
+              border: `1px solid ${info.recommendation.priority === 'Immediate'
+                ? 'rgba(239,68,68,0.4)' : info.recommendation.priority === 'High'
+                ? 'rgba(255,192,0,0.4)' : 'rgba(34,211,238,0.4)'}`,
+              color: info.recommendation.priority === 'Immediate'
+                ? 'var(--accent-red)' : info.recommendation.priority === 'High'
+                ? 'var(--accent-yellow)' : 'var(--accent-cyan)',
+              letterSpacing: '0.04em',
+            }}>
+              {info.recommendation.priority} Priority
+            </span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', alignSelf: 'center' }}>
+              Zone: <span style={{ color: info.colorVar, fontWeight: '700' }}>{data.suspected_zone}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Two-column layout: left = summary, right = action steps */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'start' }}>
+
+          {/* Left — primary action summary + follow-up */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{
+              padding: '14px 16px',
+              background: 'rgba(239,68,68,0.07)',
+              border: '1px solid rgba(239,68,68,0.28)',
+              borderRadius: '8px',
+              color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: '600', lineHeight: '1.6',
+            }}>
+              {data.recommended_action || 'Inspect the detected zone and report findings to maintenance.'}
+            </div>
+            <div style={{
+              padding: '12px 14px',
+              background: 'rgba(128,128,128,0.06)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '6px',
+            }}>
+              <div style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Follow-up</div>
+              <div style={{ fontSize: '0.79rem', color: 'var(--text-secondary)', lineHeight: '1.55' }}>
+                {info.recommendation.follow_up}
               </div>
             </div>
           </div>
-        )}
+
+          {/* Right — action steps in 2×2 grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            {info.recommendation.actions.map((action, i) => (
+              <div key={i} style={{
+                display: 'flex', gap: '10px', alignItems: 'flex-start',
+                padding: '12px', background: 'rgba(128,128,128,0.05)',
+                borderRadius: '8px', border: '1px solid var(--border-subtle)',
+              }}>
+                <span style={{
+                  minWidth: '22px', height: '22px', borderRadius: '50%',
+                  background: info.colorVar, color: '#000',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '0.62rem', fontWeight: '900', flexShrink: 0, marginTop: '1px',
+                }}>{i + 1}</span>
+                <span style={{ fontSize: '0.81rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>{action}</span>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </div>
+
+      {/* Inspection checklist */}
+      <div className="card" style={{ gridColumn: 'span 3', padding: '22px' }}>
+        <div className="card-header">
+          <span className="card-title">Inspection Checklist — {info.title}</span>
+        </div>
+        <div style={{
+          marginTop: '16px',
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '10px',
+        }}>
+          {info.inspection_steps.map((step, i) => (
+            <div key={i} style={{
+              display: 'flex', gap: '12px', alignItems: 'flex-start',
+              padding: '13px', background: 'rgba(128,128,128,0.06)',
+              borderRadius: '8px', border: '1px solid var(--border-subtle)',
+            }}>
+              <div style={{
+                minWidth: '26px', height: '26px', borderRadius: '50%',
+                background: info.colorVar, color: '#000',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.7rem', fontWeight: '900', flexShrink: 0,
+              }}>
+                {i + 1}
+              </div>
+              <div style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', lineHeight: '1.55' }}>
+                {step}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -674,6 +1226,7 @@ function AcousticLeakDetector({
 function App() {
   const [showIntro, setShowIntro] = useState(true)
   const [activePage, setActivePage] = useState('dashboard')
+  const [prevPage, setPrevPage] = useState('dashboard')
   const [predictionData, setPredictionData] = useState(null)
   const [history, setHistory] = useState([])
   const [isConnected, setIsConnected] = useState(false)
@@ -688,6 +1241,15 @@ function App() {
   const debounceRef = useRef(null)
 
   const [daqStatus, setDaqStatus] = useState('Disconnected')
+  const [isDark, setIsDark] = useState(true)
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.remove('light')
+    } else {
+      document.documentElement.classList.add('light')
+    }
+  }, [isDark])
 
   const handleConnectDAQ = async () => {
     if (isDemoRunning) {
@@ -870,6 +1432,12 @@ function App() {
           filename: selectedFile,
         }),
       });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Audio analysis failed (${res.status}): ${errorText || 'Unknown error'}`);
+      }
+
       const result = await res.json();
       setAcousticResult(result);
 
@@ -1225,27 +1793,64 @@ function App() {
     <>
       {showIntro && <IntroVideo onComplete={() => setShowIntro(false)} />}
       <div className="app-container">
-        <Sidebar activePage={activePage} setActivePage={setActivePage} isConnected={isConnected} />
-
-        <main className="main-content">
-          <div className="main-header">
-            <h2>
-              {activePage === 'dashboard' && 'Real-Time Dashboard'}
-              {activePage === 'engine' && 'Analysis'}
-              {activePage === 'history' && 'Detection History'}
-              {activePage === 'dax' && 'Sensor Hub'}
-              {activePage === 'digital-twin' && 'Digital Twin'}
-            </h2>
-            <div className="header-controls">
-              <span className={`header-badge ${isConnected ? 'badge-connected' : 'badge-disconnected'}`}>
-                <span className="status-dot" style={{
-                  background: isConnected ? 'var(--accent-emerald)' : 'var(--accent-red)',
-                  width: '6px', height: '6px'
-                }}></span>
-                {isConnected ? 'LIVE' : 'OFFLINE'}
-              </span>
-            </div>
-          </div>
+        <SidebarProvider>
+          <AppSidebar activePage={activePage} setActivePage={setActivePage} />
+          <SidebarInset>
+            <main className="main-content" style={{ width: '100%', padding: '1rem' }}>
+              <div className="main-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+                <h2>
+                  {activePage === 'dashboard' && 'Real-Time Dashboard'}
+                  {activePage === 'engine' && 'Analysis'}
+                  {activePage === 'history' && 'Detection History'}
+                  {activePage === 'dax' && 'DAX Engine Query Console'}
+                  {activePage === 'digital-twin' && 'Digital Twin'}
+                  {activePage === 'zone-detail' && 'Zone Inspection Report'}
+                </h2>
+                <div className="header-controls" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span className={`header-badge ${isConnected ? 'badge-connected' : 'badge-disconnected'}`}>
+                    <span className="status-dot" style={{
+                      background: isConnected ? 'var(--accent-emerald)' : 'var(--accent-red)',
+                      width: '6px', height: '6px'
+                    }}></span>
+                    {isConnected ? 'LIVE' : 'OFFLINE'}
+                  </span>
+                  <button
+                    onClick={() => setIsDark(p => !p)}
+                    title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                    style={{
+                      width: '34px', height: '34px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-subtle)',
+                      background: 'var(--bg-card)',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                      transition: 'background 0.2s, border-color 0.2s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-yellow)'}
+                    onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
+                  >
+                    {isDark ? (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                      </svg>
+                    ) : (
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
 
           {/* Demo Controls — always visible */}
           <div className="dashboard-grid" style={{ marginBottom: '20px' }}>
@@ -1260,12 +1865,12 @@ function App() {
 
               <select className="demo-select" value={simZone} onChange={e => setSimZone(Number(e.target.value))}>
                 <option value={0}>Healthy (No Leak)</option>
-                <option value={1}>Zone 1 — Intake</option>
-                <option value={2}>Zone 2 — Charge Air</option>
-                <option value={3}>Zone 3 — CAC/Manifold</option>
-                <option value={4}>Zone 4 — Exhaust</option>
-                <option value={5}>Zone 5 — DPF</option>
-                <option value={6}>Zone 6 — SCR/Tailpipe</option>
+                <option value={1}>Zone 1 - Intake</option>
+                <option value={2}>Zone 2 - Charge Air</option>
+                <option value={3}>Zone 3 - CAC/Manifold</option>
+                <option value={4}>Zone 4 - Exhaust</option>
+                <option value={5}>Zone 5 - DPF</option>
+                <option value={6}>Zone 6 - SCR/Tailpipe</option>
               </select>
 
               <select className="demo-select" value={simSeverity} onChange={e => setSimSeverity(Number(e.target.value))}>
@@ -1281,12 +1886,20 @@ function App() {
             </div>
           </div>
 
+          {/* Zone Detail Page */}
+          {activePage === 'zone-detail' && (
+            <ZoneDetailPage
+              data={data}
+              onBack={() => setActivePage(prevPage)}
+            />
+          )}
+
           {/* Dashboard Page */}
           {activePage === 'dashboard' && (
             <div className="dashboard-grid">
               <GoNoGoIndicator status={data.go_no_go} />
               <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
-              <LeakAlertCard data={data} />
+              <LeakAlertCard data={data} onInspect={() => { setPrevPage('dashboard'); setActivePage('zone-detail') }} />
 
               <SensorGrid sensors={data.sensors} />
               <EnergyFieldHeatmap efData={data.energy_field} />
@@ -1323,7 +1936,7 @@ function App() {
               <GoNoGoIndicator status={data.go_no_go} />
               <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />
               <EnergyFieldGraph efData={data.energy_field} />
-              <LeakAlertCard data={data} />
+              <LeakAlertCard data={data} onInspect={() => { setPrevPage('engine'); setActivePage('zone-detail') }} />
               <ZoneProbabilities probs={data.zone_probabilities} />
             </div>
           )}
@@ -1352,7 +1965,9 @@ function App() {
               />
             </div>
           )}
-        </main>
+          </main>
+          </SidebarInset>
+        </SidebarProvider>
         <ChatBot />
       </div>
     </>

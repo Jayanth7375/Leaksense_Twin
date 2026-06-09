@@ -15,7 +15,7 @@ const QUICK_QUERIES = [
 // ─── Custom Zero-Dependency SVG Line Chart ──────────────────────────
 function ResultLineChart({ data, columns }) {
   const numericCol = columns.find(col => data.some(row => typeof row[col] === 'number' && col !== 'LeakZone' && col !== 'LeakZone_idx'));
-  if (!numericCol) return <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', padding: '10px 0' }}>No numeric columns available for charting.</div>;
+  if (!numericCol) return <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '10px 0' }}>No numeric columns available for charting.</div>;
 
   const values = data.map(row => Number(row[numericCol] || 0));
   const maxVal = Math.max(...values, 1.0);
@@ -40,12 +40,12 @@ function ResultLineChart({ data, columns }) {
   ].join(' ') : '';
 
   return (
-    <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+    <div style={{ marginTop: '15px', padding: '15px', background: 'rgba(128,128,128,0.06)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-        <span style={{ fontWeight: '700', fontSize: '0.8rem', color: 'var(--accent-yellow)' }}>
-          📈 TELEMETRY TREND: {numericCol.toUpperCase()}
+        <span style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--accent-yellow)' }}>
+          TELEMETRY TREND: {numericCol.toUpperCase()}
         </span>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
           Min: {minVal.toFixed(1)} · Max: {maxVal.toFixed(1)}
         </span>
       </div>
@@ -56,22 +56,18 @@ function ResultLineChart({ data, columns }) {
             <stop offset="100%" stopColor="var(--accent-yellow)" stopOpacity="0.0" />
           </linearGradient>
         </defs>
-        {/* Horizontal grid lines */}
-        <line x1={padding} y1={padding} x2={width-padding} y2={padding} stroke="rgba(255,255,255,0.05)" />
-        <line x1={padding} y1={height/2} x2={width-padding} y2={height/2} stroke="rgba(255,255,255,0.05)" />
-        <line x1={padding} y1={height-padding} x2={width-padding} y2={height-padding} stroke="rgba(255,255,255,0.15)" />
+        <line x1={padding} y1={padding} x2={width-padding} y2={padding} style={{ stroke: 'rgba(128,128,128,0.2)' }} />
+        <line x1={padding} y1={height/2} x2={width-padding} y2={height/2} style={{ stroke: 'rgba(128,128,128,0.2)' }} />
+        <line x1={padding} y1={height-padding} x2={width-padding} y2={height-padding} style={{ stroke: 'rgba(128,128,128,0.25)' }} />
 
-        {/* Shaded Area */}
         {points.length > 1 && (
           <polygon points={areaPoints} fill="url(#chartGrad)" />
         )}
-        {/* Line Path */}
         {points.length > 1 && (
           <polyline points={polylinePoints} fill="none" stroke="var(--accent-yellow)" strokeWidth="2.5" strokeLinecap="round" />
         )}
-        {/* Render Circles for small lists */}
         {points.length <= 30 && points.map((p, idx) => (
-          <circle key={idx} cx={p.x} cy={p.y} r="3" fill="#ffffff" stroke="var(--accent-yellow)" strokeWidth="1.5" />
+          <circle key={idx} cx={p.x} cy={p.y} r="3" style={{ fill: 'var(--text-primary)', stroke: 'var(--accent-yellow)', strokeWidth: '1.5' }} />
         ))}
       </svg>
     </div>
@@ -86,11 +82,11 @@ function CircularGauge({ value, min, max, unit, title, color }) {
   const offset = circumference - (pct / 100) * circumference;
 
   return (
-    <div className="sensor-item" style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-glass)' }}>
-      <div className="sensor-label" style={{ fontSize: '0.65rem', marginBottom: '6px' }}>{title}</div>
+    <div className="sensor-item" style={{ textAlign: 'center', padding: '12px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: '6px' }}>
+      <div className="sensor-label" style={{ fontSize: '0.75rem', marginBottom: '6px' }}>{title}</div>
       <div style={{ position: 'relative', width: '84px', height: '84px', margin: '0 auto' }}>
         <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
-          <circle cx="50" cy="50" r={radius} fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="6" />
+          <circle cx="50" cy="50" r={radius} fill="none" style={{ stroke: 'var(--border-subtle)' }} strokeWidth="6" />
           <circle
             cx="50" cy="50" r={radius} fill="none"
             stroke={color || 'var(--accent-yellow)'}
@@ -106,7 +102,7 @@ function CircularGauge({ value, min, max, unit, title, color }) {
           fontSize: '0.95rem', fontWeight: '800', fontFamily: 'var(--font-mono)'
         }}>
           {Math.round(value)}
-          <span style={{ fontSize: '0.55rem', color: 'var(--text-muted)', display: 'block', fontWeight: 'normal' }}>{unit}</span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 'normal' }}>{unit}</span>
         </div>
       </div>
     </div>
@@ -118,7 +114,7 @@ export default function DAXConsole() {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [viewMode, setViewMode] = useState('table'); // 'table' | 'chart'
+  const [viewMode, setViewMode] = useState('table');
 
   // DAQ states
   const [daqStatus, setDaqStatus] = useState('Disconnected');
@@ -142,30 +138,40 @@ export default function DAXConsole() {
 
   const [liveSensorList, setLiveSensorList] = useState([]);
   const [liveQueryMode, setLiveQueryMode] = useState(false);
+  const [isLightMode, setIsLightMode] = useState(
+    () => document.documentElement.classList.contains('light')
+  )
 
   const wsRef = useRef(null);
   const liveQueryIntervalRef = useRef(null);
 
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsLightMode(document.documentElement.classList.contains('light'))
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
   // Load current DAQ status on mount
   useEffect(() => {
     fetch(`${API_BASE}/api/dax/daq/status`)
-      .then(res => res.json())
+      .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
       .then(data => {
-        setDaqStatus(data.status);
-        setConnectionType(data.connection_type);
-        setDeviceName(data.device_name);
-        setSamplingRate(data.sampling_rate);
-        setPacketsReceived(data.packets_received);
-        setSensorCount(data.sensor_count);
+        if (data.status !== undefined) setDaqStatus(data.status);
+        if (data.connection_type !== undefined) setConnectionType(data.connection_type);
+        if (data.device_name !== undefined) setDeviceName(data.device_name);
+        if (data.sampling_rate !== undefined) setSamplingRate(data.sampling_rate);
+        if (data.packets_received !== undefined) setPacketsReceived(data.packets_received);
+        if (data.sensor_count !== undefined) setSensorCount(data.sensor_count);
         setLastUpdate(data.last_update || '-');
-        setSimulationState(data.simulation_state);
-        setRecording(data.recording);
-        setRecordedCount(data.recorded_count);
-        setAiPrediction(data.ai_prediction);
+        if (data.simulation_state !== undefined) setSimulationState(data.simulation_state);
+        if (data.recording !== undefined) setRecording(data.recording);
+        if (data.recorded_count !== undefined) setRecordedCount(data.recorded_count);
+        if (data.ai_prediction !== undefined) setAiPrediction(data.ai_prediction);
       })
       .catch(err => console.error('Error fetching DAQ status:', err));
 
-    // Connect to WebSocket
     connectWebSocket();
 
     return () => {
@@ -206,7 +212,6 @@ export default function DAXConsole() {
         setLatestPacket(msg.packet);
         setAiPrediction(msg.ai_prediction);
 
-        // Append to live sensor grid table (max 12 rows)
         setLiveSensorList(prev => {
           const updated = [msg.packet, ...prev];
           return updated.slice(0, 12);
@@ -214,7 +219,6 @@ export default function DAXConsole() {
       }
     };
     ws.onclose = () => {
-      // Reconnect after 3 seconds
       setTimeout(connectWebSocket, 3000);
     };
     wsRef.current = ws;
@@ -304,30 +308,30 @@ export default function DAXConsole() {
   };
 
   return (
-    <div className="card" style={{ gridColumn: '1 / -1', minHeight: '800px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      
+    <div className="card" style={{ gridColumn: '1 / -1', minHeight: '800px', display: 'flex', flexDirection: 'column', gap: '20px', background: 'var(--bg-primary)' }}>
+
       {/* ─── TITLE & CONNECTION BADGE ─────────────────────────────────── */}
       <div className="card-header" style={{ marginBottom: '5px' }}>
         <span className="card-title" style={{ fontSize: '1.1rem', fontWeight: '800', background: 'linear-gradient(135deg, var(--accent-yellow) 0%, #ff9800 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          ⚙️ REAL-TIME DAQ ANALYTICS SUITE
+          REAL-TIME DAQ ANALYTICS SUITE
         </span>
-        <span className="header-badge" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', padding: '5px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <span className="header-badge" style={{ background: 'rgba(0,0,0,0.05)', border: '1px solid var(--border-color)', padding: '5px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="status-dot" style={{ background: getStatusColor(), boxShadow: `0 0 10px ${getStatusColor()}`, width: '8px', height: '8px' }}></span>
-          <span style={{ textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>{daqStatus}</span>
+          <span style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 'bold', letterSpacing: '0.5px' }}>{daqStatus}</span>
         </span>
       </div>
 
       {/* ─── GRID: CONTROLS & DIAGNOSTIC GAUGES ─────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
-        
+
         {/* PANEL A: CONNECTION MANAGER */}
-        <div className="card" style={{ background: '#000000', border: '1px solid var(--border-subtle)', padding: '16px' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase', marginBottom: '12px' }}>
-            🔌 DAQ Connection Manager
+        <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--accent-yellow)', textTransform: 'uppercase', marginBottom: '12px' }}>
+            DAQ Connection Manager
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             <div>
-              <label className="sensor-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Interface Bus</label>
+              <label className="sensor-label" style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'block' }}>Interface Bus</label>
               <select className="demo-select" style={{ width: '100%', padding: '6px' }} value={connectionType} onChange={e => setConnectionType(e.target.value)} disabled={daqStatus === 'Connected'}>
                 <option value="Simulated DAQ Data">Simulated DAQ Data</option>
                 <option value="CAN Bus">CAN Bus (SAE J1939)</option>
@@ -339,13 +343,13 @@ export default function DAXConsole() {
             </div>
 
             <div>
-              <label className="sensor-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Device / Address</label>
-              <input type="text" className="chatbot-input" style={{ width: '100%', margin: '0', borderRadius: '4px', padding: '6px 12px' }} value={deviceName} onChange={e => setDeviceName(e.target.value)} disabled={daqStatus === 'Connected'} />
+              <label className="sensor-label" style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'block' }}>Device / Address</label>
+              <input type="text" className="chatbot-input" style={{ width: '100%', margin: '0', borderRadius: '4px', padding: '6px 12px', background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)' }} value={deviceName} onChange={e => setDeviceName(e.target.value)} disabled={daqStatus === 'Connected'} />
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
               <div style={{ flex: 1 }}>
-                <label className="sensor-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Sampling Rate</label>
+                <label className="sensor-label" style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'block' }}>Sampling Rate</label>
                 <select className="demo-select" style={{ width: '100%', padding: '6px' }} value={samplingRate} onChange={e => setSamplingRate(Number(e.target.value))} disabled={daqStatus === 'Connected'}>
                   <option value={1}>1 Hz</option>
                   <option value={5}>5 Hz</option>
@@ -353,7 +357,7 @@ export default function DAXConsole() {
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label className="sensor-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Simulator Mode</label>
+                <label className="sensor-label" style={{ fontSize: '0.75rem', marginBottom: '4px', display: 'block' }}>Simulator Mode</label>
                 <select className="demo-select" style={{ width: '100%', padding: '6px' }} value={simulationState} onChange={e => setSimulationState(e.target.value)}>
                   <option value="Healthy">Healthy State</option>
                   <option value="Minor Leak">Minor Air Leak</option>
@@ -367,11 +371,11 @@ export default function DAXConsole() {
             <div style={{ marginTop: '5px' }}>
               {daqStatus === 'Connected' ? (
                 <button className="demo-btn danger" style={{ width: '100%', justifyContent: 'center', padding: '8px' }} onClick={handleDisconnect}>
-                  🛑 DISCONNECT STREAM
+                  DISCONNECT STREAM
                 </button>
               ) : (
                 <button className="demo-btn active" style={{ width: '100%', justifyContent: 'center', padding: '8px' }} onClick={handleConnect} disabled={daqStatus === 'Connecting'}>
-                  {daqStatus === 'Connecting' ? 'Establishing link...' : '⚡ INITIALIZE DAQ LINK'}
+                  {daqStatus === 'Connecting' ? 'Establishing link...' : 'INITIALIZE DAQ LINK'}
                 </button>
               )}
             </div>
@@ -379,9 +383,9 @@ export default function DAXConsole() {
         </div>
 
         {/* PANEL B: REAL-TIME GAUGES */}
-        <div className="card" style={{ background: '#000000', border: '1px solid var(--border-subtle)', padding: '16px' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase', marginBottom: '12px' }}>
-            📊 Real-Time Engine Visualizer
+        <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--accent-yellow)', textTransform: 'uppercase', marginBottom: '12px' }}>
+            Real-Time Engine Visualizer
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
             <CircularGauge value={latestPacket.RPM} min={0} max={3000} unit="rpm" title="Engine RPM" color="var(--accent-yellow)" />
@@ -389,31 +393,31 @@ export default function DAXConsole() {
             <CircularGauge value={latestPacket.CoolantTemp} min={0} max={120} unit="°C" title="Coolant Temp" color="var(--status-go)" />
             <CircularGauge value={latestPacket.OilPressure} min={0} max={600} unit="kPa" title="Oil Pressure" color="var(--status-go)" />
           </div>
-          <div style={{ display: 'flex', gap: '15px', marginTop: '12px', padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', gap: '15px', marginTop: '12px', padding: '8px 12px', background: 'rgba(128,128,128,0.08)', borderRadius: '6px', border: '1px solid var(--border-subtle)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
             <div>Packets: <strong>{packetsReceived}</strong></div>
             <div>Sensors: <strong>{sensorCount} ch</strong></div>
             <div>Sync Clock: <strong>{lastUpdate}</strong></div>
-            <div>Mode: <strong style={{ color: 'var(--accent-yellow)' }}>{simulationState.toUpperCase()}</strong></div>
+            <div>Mode: <strong style={{ color: 'var(--accent-yellow)' }}>{(simulationState || 'HEALTHY').toUpperCase()}</strong></div>
           </div>
         </div>
       </div>
 
       {/* ─── GRID: RECORDING CONTROL & AI PREDICTION ────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr', gap: '20px' }}>
-        
+
         {/* PANEL C: AI PREDICTIVE HEALTH SYSTEM */}
-        <div className="card" style={{ background: '#000000', border: '1px solid var(--border-subtle)', padding: '16px' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase', marginBottom: '12px' }}>
-            🧠 Real-Time AI Diagnostics Layer
+        <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
+          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--accent-yellow)', textTransform: 'uppercase', marginBottom: '12px' }}>
+            Real-Time AI Diagnostics Layer
           </div>
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-            
+
             {/* Global health dial */}
             <div style={{ textAlign: 'center', width: '100px', flexShrink: 0 }}>
-              <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Engine Health</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Engine Health</div>
               <div style={{ position: 'relative', width: '80px', height: '80px', margin: '0 auto' }}>
                 <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
-                  <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="8" />
+                  <circle cx="50" cy="50" r="40" fill="none" style={{ stroke: 'var(--border-subtle)' }} strokeWidth="8" />
                   <circle
                     cx="50" cy="50" r="40" fill="none"
                     stroke={aiPrediction.engine_health > 75 ? 'var(--status-go)' : aiPrediction.engine_health > 45 ? 'var(--accent-yellow)' : 'var(--accent-red)'}
@@ -423,7 +427,7 @@ export default function DAXConsole() {
                     style={{ transition: 'stroke-dashoffset 0.3s ease' }}
                   />
                 </svg>
-                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '1.2rem', fontWeight: '900', color: '#fff' }}>
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '1.2rem', fontWeight: '900', color: 'var(--text-primary)' }}>
                   {aiPrediction.engine_health}%
                 </div>
               </div>
@@ -440,11 +444,11 @@ export default function DAXConsole() {
                 const val = aiPrediction[item.key] || 0.0;
                 return (
                   <div key={item.key}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-secondary)', marginBottom: '3px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '3px' }}>
                       <span>{item.label}</span>
                       <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 'bold' }}>{(val * 100).toFixed(1)}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ height: '6px', background: 'rgba(128,128,128,0.15)', borderRadius: '3px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', background: item.color, width: `${val * 100}%`, transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
@@ -455,27 +459,27 @@ export default function DAXConsole() {
         </div>
 
         {/* PANEL D: DATA EXPORTER & RECORDER */}
-        <div className="card" style={{ background: '#000000', border: '1px solid var(--border-subtle)', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase', marginBottom: '8px' }}>
-              🔴 Data Logging & Telemetry Exporter
+            <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--accent-yellow)', textTransform: 'uppercase', marginBottom: '8px' }}>
+              Data Logging & Telemetry Exporter
             </div>
-            <p style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', lineHeight: '1.4', marginBottom: '10px' }}>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.5', marginBottom: '10px' }}>
               Record real-time telemetry packets directly into an in-memory session buffer. Stop logging to package and export data in standard formats.
             </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: '0.75rem' }}>Status: <strong style={{ color: recording ? 'var(--accent-red)' : 'var(--text-muted)' }}>{recording ? 'RECORDING LIVE' : 'STOPPED'}</strong></span>
-              <span style={{ fontSize: '0.75rem' }}>Buffer: <strong>{recordedCount} packets</strong></span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(128,128,128,0.08)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: '0.8rem' }}>Status: <strong style={{ color: recording ? 'var(--accent-red)' : 'var(--text-muted)' }}>{recording ? 'RECORDING LIVE' : 'STOPPED'}</strong></span>
+              <span style={{ fontSize: '0.8rem' }}>Buffer: <strong>{recordedCount} packets</strong></span>
             </div>
-            
+
             <div style={{ display: 'flex', gap: '10px' }}>
               <button className={`demo-btn ${recording ? 'danger active' : 'active'}`} style={{ flex: 1, justifyContent: 'center' }} onClick={toggleRecording} disabled={daqStatus !== 'Connected'}>
-                {recording ? '⏹️ STOP LOGGER' : '🔴 START LOGGER'}
+                {recording ? 'STOP LOGGER' : 'START LOGGER'}
               </button>
-              
+
               <div style={{ display: 'flex', gap: '5px' }}>
                 <button className="demo-btn" style={{ padding: '8px 12px' }} onClick={() => exportRecording('json')} disabled={recordedCount === 0 || recording}>
                   JSON
@@ -490,14 +494,14 @@ export default function DAXConsole() {
       </div>
 
       {/* ─── LIVE SENSOR LOG DATA LOGGER TABLE ──────────────────────── */}
-      <div className="card" style={{ background: '#000000', border: '1px solid var(--border-subtle)', padding: '16px' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase', marginBottom: '10px' }}>
-          📑 Live Telemetry Packet Log (SensorReadings)
+      <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
+        <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--accent-yellow)', textTransform: 'uppercase', marginBottom: '10px' }}>
+          Live Telemetry Packet Log (SensorReadings)
         </div>
         <div style={{ overflowX: 'auto', maxHeight: '180px' }}>
           <table className="history-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
-              <tr style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              <tr style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                 <th style={{ padding: '6px 8px' }}>Timestamp</th>
                 <th style={{ padding: '6px 8px' }}>RPM</th>
                 <th style={{ padding: '6px 8px' }}>MAF</th>
@@ -514,15 +518,15 @@ export default function DAXConsole() {
             <tbody>
               {liveSensorList.length === 0 ? (
                 <tr>
-                  <td colSpan="11" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '15px' }}>
+                  <td colSpan="11" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '15px', fontSize: '0.8rem' }}>
                     {daqStatus === 'Connected' ? 'Awaiting incoming packet streams...' : 'Connect to a DAQ stream to start logging packets.'}
                   </td>
                 </tr>
               ) : (
                 liveSensorList.map((row, idx) => (
-                  <tr key={idx} style={{ 
-                    fontSize: '0.75rem', 
-                    borderTop: '1px solid rgba(255,255,255,0.03)',
+                  <tr key={idx} style={{
+                    fontSize: '0.8rem',
+                    borderTop: '1px solid rgba(0,0,0,0.07)',
                     background: row.LeakZone > 0 ? 'rgba(239, 68, 68, 0.12)' : 'transparent'
                   }}>
                     <td style={{ padding: '6px 8px', color: 'var(--text-muted)' }}>{row.Timestamp}</td>
@@ -557,65 +561,81 @@ export default function DAXConsole() {
       </div>
 
       {/* ─── DAX COMPILER & SANDBOX EDITOR ─────────────────────────── */}
-      <div className="card" style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
+      <div className="card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', padding: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-accent)', textTransform: 'uppercase' }}>
-            💻 Sensor Query Sandbox
+          <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: 'var(--accent-yellow)', textTransform: 'uppercase' }}>
+            Sensor Query Sandbox
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label className="sensor-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'none', fontSize: '0.72rem', cursor: 'pointer' }}>
+            <label className="sensor-label" style={{ display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'none', fontSize: '0.8rem', cursor: 'pointer' }}>
               <input type="checkbox" checked={liveQueryMode} onChange={e => setLiveQueryMode(e.target.checked)} disabled={daqStatus !== 'Connected'} style={{ cursor: 'pointer' }} />
-              ⏱️ Auto-Run Query (1 Hz)
+              Auto-Run Query (1 Hz)
             </label>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
           {QUICK_QUERIES.map(q => (
-            <button 
-              key={q.label} 
-              className="demo-btn" 
-              style={{ padding: '5px 12px', fontSize: '11px' }}
+            <button
+              key={q.label}
+              className="demo-btn"
+              style={{ padding: '5px 12px', fontSize: '0.75rem' }}
               onClick={() => { setQuery(q.query); runQuery(q.query); }}
             >
               {q.label}
             </button>
           ))}
         </div>
-        
+
         <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', height: '180px' }}>
           <Editor
             height="100%"
             defaultLanguage="sql"
-            theme="vs-dark"
+            theme={isLightMode ? "vs" : "vs-dark"}
             value={query}
             onChange={(val) => setQuery(val)}
             options={{ minimap: { enabled: false }, fontSize: 13 }}
           />
         </div>
-        
+
         <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
-          <button className="demo-btn active" onClick={() => runQuery()} disabled={loading}>
-            {loading ? 'Running...' : 'RUN Ctrl+Enter'}
+          <button className="demo-btn active" onClick={() => runQuery()} disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: '7px', letterSpacing: '0.06em' }}>
+            {loading ? (
+              <>
+                <span style={{
+                  width: '10px', height: '10px', borderRadius: '50%',
+                  border: '2px solid rgba(0,0,0,0.25)', borderTopColor: '#000',
+                  animation: 'spin 0.7s linear infinite', display: 'inline-block',
+                }} />
+                Executing...
+              </>
+            ) : (
+              <>
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
+                  <polygon points="1,0 11,5.5 1,11" />
+                </svg>
+                Run Query
+              </>
+            )}
           </button>
-          <button className="demo-btn" onClick={() => setQuery('')}>CLEAR</button>
+          <button className="demo-btn" onClick={() => setQuery('')}>Clear</button>
         </div>
 
-        {error && <div style={{ color: 'var(--accent-red)', marginTop: '15px', fontSize: '0.8rem' }}>Error: {error}</div>}
+        {error && <div style={{ color: 'var(--accent-red)', marginTop: '15px', fontSize: '0.85rem' }}>Error: {error}</div>}
 
         {result && (
           <div style={{ marginTop: '15px' }}>
-            {/* View Mode Tabs (if not scalar) */}
             {!result.is_scalar && result.rows.length > 0 && (
               <div style={{ display: 'flex', gap: '5px', marginBottom: '10px', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '5px' }}>
-                <button className={`demo-btn ${viewMode === 'table' ? 'active' : ''}`} style={{ padding: '3px 10px', fontSize: '11px' }} onClick={() => setViewMode('table')}>TABLE</button>
-                <button className={`demo-btn ${viewMode === 'chart' ? 'active' : ''}`} style={{ padding: '3px 10px', fontSize: '11px' }} onClick={() => setViewMode('chart')}>CHART</button>
+                <button className={`demo-btn ${viewMode === 'table' ? 'active' : ''}`} style={{ padding: '3px 10px', fontSize: '0.75rem' }} onClick={() => setViewMode('table')}>TABLE</button>
+                <button className={`demo-btn ${viewMode === 'chart' ? 'active' : ''}`} style={{ padding: '3px 10px', fontSize: '0.75rem' }} onClick={() => setViewMode('chart')}>CHART</button>
               </div>
             )}
 
             {result.is_scalar ? (
-              <div style={{ padding: '15px', background: 'rgba(252,212,65,0.05)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Scalar Metric Value</div>
+              <div style={{ padding: '15px', background: 'rgba(255,192,0,0.12)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px' }}>Scalar Metric Value</div>
                 <div style={{ fontSize: '36px', color: 'var(--accent-yellow)', fontFamily: 'Orbitron, sans-serif', fontWeight: '800' }}>
                   {result.scalar_value !== null ? result.scalar_value.toFixed(2) : 'No result'}
                 </div>
@@ -625,13 +645,13 @@ export default function DAXConsole() {
                 <div style={{ overflowX: 'auto', maxHeight: '200px' }}>
                   <table className="history-table" style={{ width: '100%' }}>
                     <thead>
-                      <tr style={{ fontSize: '0.7rem' }}>
+                      <tr style={{ fontSize: '0.75rem' }}>
                         {result.columns.map(col => <th key={col} style={{ padding: '6px 8px' }}>{col}</th>)}
                       </tr>
                     </thead>
                     <tbody>
                       {result.rows.slice(0, 30).map((row, i) => (
-                        <tr key={i} style={{ fontSize: '0.72rem' }}>
+                        <tr key={i} style={{ fontSize: '0.8rem' }}>
                           {result.columns.map(col => (
                             <td key={col} style={{ padding: '6px 8px' }}>
                               {typeof row[col] === 'number' ? row[col].toFixed(2) : String(row[col])}
@@ -646,7 +666,7 @@ export default function DAXConsole() {
                 <ResultLineChart data={result.rows} columns={result.columns} />
               )
             )}
-            <div style={{ marginTop: '10px', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+            <div style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               Rows count: {result.row_count} · Execution: {result.execution_ms}ms
             </div>
           </div>

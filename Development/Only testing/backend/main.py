@@ -736,6 +736,7 @@ async def websocket_live(ws: WebSocket):
                 await ws.send_json(result)
             except Exception as send_err:
                 print(f"  WebSocket send error: {send_err}")
+                break
     except WebSocketDisconnect:
         print("  WebSocket client disconnected")
     except Exception as e:
