@@ -1,6 +1,7 @@
 import React from "react"
 import {
   Menu,
+  Workflow,
   LayoutDashboard,
   Activity,
   History,
@@ -24,6 +25,11 @@ import { useSidebar } from "@/components/blocks/sidebar"
 export function AppSidebar({ activePage, setActivePage }) {
 
   const items = [
+    {
+      title: "Ingestion",
+      id: "ingestion",
+      icon: Workflow,
+    },
     {
       title: "Real-Time Dashboard",
       id: "dashboard",

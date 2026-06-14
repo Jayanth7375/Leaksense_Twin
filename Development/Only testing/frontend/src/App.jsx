@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs'
 import './index.css'
 import DAXConsole from './DAXConsole'
 import ChatBot from './ChatBot'
@@ -7,15 +8,25 @@ import ZoneModel3D from './ZoneModel3D'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/blocks/sidebar"
 import { AppSidebar } from "@/components/blocks/whatsapp-sidebar"
 
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.mjs', import.meta.url).toString()
+
 // ─── Intro Video Component ──────────────────────────────────────
 function IntroVideo({ onComplete }) {
   const videoRef = useRef(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(err => console.log('Autoplay prevented:', err));
+    }
+  }, []);
 
   return (
     <div className="intro-container">
       <video
         ref={videoRef}
+        muted
         autoPlay
+        playsInline
         className="intro-video"
         onEnded={onComplete}
       >
@@ -210,9 +221,123 @@ const SENSOR_UNITS = {
   fuel_qty: 'mg/str', dP_dpf: 'kPa',
 }
 
+const CSV_SENSOR_KEY_MAP = {
+  rpm: 'RPM',
+  enginerpm: 'RPM',
+  mafsensor: 'MAF',
+  maf: 'MAF',
+  mapintake: 'MAP_intake',
+  mapboost: 'MAP_boost',
+  mapcacin: 'MAP_cac_in',
+  mapcacout: 'MAP_cac_out',
+  tintake: 'T_intake',
+  tboost: 'T_boost',
+  tcacout: 'T_cac_out',
+  texhmanifold: 'T_exh_manifold',
+  tdpfin: 'T_dpf_in',
+  tdpfout: 'T_dpf_out',
+  fuelqty: 'fuel_qty',
+  dpdpf: 'dP_dpf',
+  leakzone: 'LeakZone',
+  throttleposition: 'ThrottlePosition',
+  oilpressure: 'OilPressure',
+  oiltemp: 'OilTemp',
+  coolanttemp: 'CoolantTemp',
+  boost: 'MAP_boost',
+}
+
+function normalizeCsvKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function splitCsvLine(line) {
+  const values = []
+  let current = ''
+  let inQuotes = false
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]
+    const nextChar = line[index + 1]
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"'
+        index += 1
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      values.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+
+  values.push(current.trim())
+  return values
+}
+
+function parseCsvText(text) {
+  const rows = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  if (rows.length < 2) return []
+
+  const headers = splitCsvLine(rows[0])
+  return rows.slice(1).map((line) => {
+    const cells = splitCsvLine(line)
+    const row = {}
+
+    headers.forEach((header, index) => {
+      const rawValue = cells[index] ?? ''
+      const numericValue = Number(String(rawValue).replace(/,/g, ''))
+      row[header] = Number.isFinite(numericValue) && String(rawValue).trim() !== '' ? numericValue : rawValue
+    })
+
+    return row
+  })
+}
+
+function normalizePdfText(text) {
+  return text
+    .split(/\r?\n/)
+    .map(line => line.replace(/\t+/g, ',').replace(/\s{2,}/g, ',').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+async function extractPdfText(file) {
+  const buffer = await file.arrayBuffer()
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+  const pageTexts = []
+
+  for (let pageIndex = 1; pageIndex <= pdf.numPages; pageIndex += 1) {
+    const page = await pdf.getPage(pageIndex)
+    const content = await page.getTextContent()
+    pageTexts.push(content.items.map(item => item.str).join(' '))
+  }
+
+  return normalizePdfText(pageTexts.join('\n'))
+}
+
+function cleanCsvSensorRow(row, defaults = {}) {
+  const payload = { ...defaults }
+
+  Object.entries(row).forEach(([key, value]) => {
+    const normalizedKey = normalizeCsvKey(key)
+    const mappedKey = CSV_SENSOR_KEY_MAP[normalizedKey]
+    if (!mappedKey) return
+
+    const numericValue = typeof value === 'number' ? value : Number(String(value).replace(/,/g, ''))
+    payload[mappedKey] = Number.isFinite(numericValue) ? numericValue : value
+  })
+
+  return payload
+}
+
 // ─── Sidebar Component ──────────────────────────────────────────
 function Sidebar({ activePage, setActivePage, isConnected }) {
   const navItems = [
+    { id: 'ingestion', icon: '', label: 'Ingestion' },
     { id: 'dashboard', icon: '', label: 'Dashboard' },
     { id: 'engine', icon: '', label: 'Analysis' },
     { id: 'history', icon: '', label: 'History' },
@@ -255,6 +380,165 @@ function Sidebar({ activePage, setActivePage, isConnected }) {
         </div>
       </div>
     </aside>
+  )
+}
+
+function IngestionGateway({
+  liveStatus,
+  csvFileName,
+  csvRowCount,
+  ingestionNote,
+  csvBusy,
+  onConnectLive,
+  onCsvPick,
+  onCsvContinue,
+  csvInputRef,
+}) {
+  return (
+    <div style={{ padding: '28px', background: 'var(--bg-page)', minHeight: '100vh' }}>
+      {/* Two-column layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        {/* Live ECU Data */}
+        <div className="card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--accent-yellow)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+              Live Streaming
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--text-primary)', margin: 0, marginBottom: '10px' }}>
+              ECU Real-Time Data
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.65' }}>
+              Connect your OBD-II tool to stream live ECU data. The DAQ pipeline automatically cleans the signal and redirects into the digital twin.
+            </p>
+          </div>
+
+          {/* Checklist */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', background: 'rgba(128,128,128,0.05)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+            {[
+              'Plug in OBD tool or simulator',
+              'Click Connect to start DAQ pipeline',
+              'Signal cleans automatically',
+            ].map((step, i) => (
+              <div key={step} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--accent-yellow)', fontWeight: '800', flexShrink: 0, marginTop: '2px' }}>✓</span>
+                <span>{step}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Status */}
+          <div style={{
+            padding: '12px 14px', background: 'rgba(128,128,128,0.06)', borderRadius: '6px',
+            fontSize: '0.8rem', color: 'var(--text-muted)',
+          }}>
+            Live Status: <span style={{ color: 'var(--text-primary)', fontWeight: '700' }}>{liveStatus}</span>
+          </div>
+
+          {/* Button */}
+          <button
+            onClick={onConnectLive}
+            style={{
+              padding: '12px 16px', borderRadius: '8px', fontSize: '0.92rem', fontWeight: '700',
+              background: 'var(--accent-yellow)', color: '#000',
+              border: 'none', cursor: 'pointer', letterSpacing: '0.04em',
+              transition: 'all 0.2s ease',
+              marginTop: 'auto',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '0.9'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+          >
+            Connect OBD Tool
+          </button>
+        </div>
+
+        {/* CSV/PDF Upload */}
+        <div className="card" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--accent-cyan)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+              File Import
+            </div>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: '900', color: 'var(--text-primary)', margin: 0, marginBottom: '10px' }}>
+              CSV / PDF Upload
+            </h2>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.65' }}>
+              Upload CSV exports or text PDFs from your ECU or test bench. Data normalizes automatically and flows through DAQ pipeline.
+            </p>
+          </div>
+
+          <input
+            ref={csvInputRef}
+            type="file"
+            accept=".csv,.pdf,text/csv,application/pdf"
+            onChange={onCsvPick}
+            style={{ display: 'none' }}
+          />
+
+          {/* Upload dropzone */}
+          <button
+            type="button"
+            onClick={() => csvInputRef.current?.click()}
+            style={{
+              padding: '20px 16px', borderRadius: '8px',
+              background: 'transparent', border: '1.5px solid rgba(34,211,238,0.3)',
+              cursor: 'pointer', transition: 'all 0.2s ease',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = 'rgba(34,211,238,0.6)'
+              e.currentTarget.style.background = 'rgba(34,211,238,0.05)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'rgba(34,211,238,0.3)'
+              e.currentTarget.style.background = 'transparent'
+            }}
+          >
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: 'var(--accent-cyan)' }}>Choose CSV or PDF</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Click to browse local files</span>
+          </button>
+
+          {/* File card */}
+          {csvFileName && (
+            <div style={{
+              padding: '14px 16px', background: 'rgba(52,211,153,0.08)', borderRadius: '6px',
+              border: '1px solid rgba(52,211,153,0.3)',
+            }}>
+              <div style={{ fontSize: '0.83rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                {csvFileName}
+              </div>
+              <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                {csvRowCount > 0 ? `${csvRowCount} row${csvRowCount === 1 ? '' : 's'} ready for processing` : 'Processing...'}
+              </div>
+            </div>
+          )}
+
+          {/* Button */}
+          <button
+            onClick={onCsvContinue}
+            disabled={csvBusy || !csvFileName}
+            style={{
+              padding: '12px 16px', borderRadius: '8px', fontSize: '0.92rem', fontWeight: '700',
+              background: csvFileName ? 'var(--accent-cyan)' : 'rgba(128,128,128,0.15)',
+              color: csvFileName ? '#000' : 'var(--text-muted)',
+              border: 'none', cursor: csvFileName ? 'pointer' : 'not-allowed',
+              letterSpacing: '0.04em', transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={e => csvFileName && (e.currentTarget.style.opacity = '0.9')}
+            onMouseLeave={e => csvFileName && (e.currentTarget.style.opacity = '1')}
+          >
+            {csvBusy ? 'Processing...' : 'Upload & Continue'}
+          </button>
+
+          {ingestionNote && (
+            <div style={{
+              padding: '12px 14px', fontSize: '0.8rem', color: 'var(--text-secondary)',
+              background: 'rgba(128,128,128,0.05)', borderRadius: '6px', borderLeft: '2px solid var(--accent-yellow)',
+            }}>
+              {ingestionNote}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1009,208 +1293,193 @@ function ZoneDetailPage({ data, onBack }) {
   }
 
   return (
-    <div className="dashboard-grid">
-      {/* Zone header banner */}
-      <div className="card" style={{ gridColumn: 'span 3', padding: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <button className="demo-btn" onClick={onBack} style={{ padding: '6px 14px', fontSize: '0.8rem', flexShrink: 0 }}>
+    <div style={{ padding: '28px', background: 'var(--bg-page)', minHeight: '100vh' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '28px', display: 'flex', alignItems: 'flex-start', gap: '20px', justifyContent: 'space-between' }}>
+        <div style={{ flex: 1 }}>
+          <button className="demo-btn" onClick={onBack} style={{ padding: '6px 14px', fontSize: '0.8rem', marginBottom: '12px' }}>
             ← Back
           </button>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '1.35rem', fontWeight: '900', color: info.colorVar }}>{info.title}</div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{info.subtitle}</div>
+          <div style={{ fontSize: '1.55rem', fontWeight: '900', color: info.colorVar, marginBottom: '4px' }}>
+            {info.title}
           </div>
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <span className={`alert-severity ${getSeverityClass(data.severity)}`}>{data.severity || 'NONE'}</span>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '5px' }}>
-              Detection Confidence: {Math.round(data.confidence * 100)}%
-            </div>
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+            {info.subtitle}
           </div>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: '1.65', margin: 0 }}>
+            {info.description}
+          </p>
         </div>
-        <div style={{
-          marginTop: '18px', paddingTop: '16px',
-          borderTop: '1px solid var(--border-subtle)',
-          color: 'var(--text-secondary)', fontSize: '0.88rem', lineHeight: '1.65',
-        }}>
-          {info.description}
-        </div>
-      </div>
-
-      {/* 3D Zone Model */}
-      <div className="card" style={{ padding: '12px', overflow: 'hidden' }}>
-        <div className="card-header" style={{ marginBottom: '10px' }}>
-          <span className="card-title">3D Zone Model</span>
-          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: '8px' }}>360° Interactive</span>
-        </div>
-        <ZoneModel3D zoneId={zoneIdx} height={260} />
-      </div>
-
-      {/* Leak metrics */}
-      <div className="card" style={{ padding: '20px' }}>
-        <div className="card-header"><span className="card-title">Leak Metrics</span></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '14px' }}>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Estimated Flow Loss</div>
-            <div style={{ fontSize: '2rem', fontWeight: '900', color: getSeverityColor(data.severity) }}>
-              {(data.flow_loss_pct || 0).toFixed(1)}%
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Confidence</div>
-            <div style={{ fontSize: '2rem', fontWeight: '900', color: 'var(--accent-yellow)' }}>
-              {Math.round(data.confidence * 100)}%
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Go / No-Go</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '900', color: data.go_no_go === 'GO' ? 'var(--accent-emerald)' : 'var(--accent-red)' }}>
-              {data.go_no_go}
-            </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'right', flexShrink: 0 }}>
+          <span className={`alert-severity ${getSeverityClass(data.severity)}`}>{data.severity || 'NONE'}</span>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            Confidence: <span style={{ color: 'var(--text-primary)', fontWeight: '700' }}>{Math.round(data.confidence * 100)}%</span>
           </div>
         </div>
       </div>
 
-      {/* Affected sensors */}
-      <div className="card" style={{ padding: '20px' }}>
-        <div className="card-header"><span className="card-title">Affected Sensors</span></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
-          {info.affected_sensors.map(sensor => {
-            const val = data.sensors?.[sensor]
-            const residual = data.residuals?.[`res_${sensor}`]
-            return (
-              <div key={sensor} style={{
-                padding: '10px 12px', background: 'rgba(128,128,128,0.07)',
-                borderRadius: '7px', border: '1px solid var(--border-subtle)',
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--text-primary)' }}>
-                    {sensor.replace(/_/g, ' ')}
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--accent-yellow)' }}>
-                    {typeof val === 'number' ? val.toFixed(1) : '—'} {SENSOR_UNITS[sensor] || ''}
-                  </span>
+      {/* Grid Layout: 2 columns, responsive */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
+        {/* Left Column: Metrics + Sensors */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Leak Metrics */}
+          <div className="card" style={{ padding: '20px' }}>
+            <div className="card-header" style={{ marginBottom: '14px' }}><span className="card-title">Leak Metrics</span></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+              <div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Flow Loss</div>
+                <div style={{ fontSize: '1.85rem', fontWeight: '900', color: getSeverityColor(data.severity) }}>
+                  {(data.flow_loss_pct || 0).toFixed(1)}%
                 </div>
-                {typeof residual === 'number' && residual !== 0 && (
-                  <div style={{
-                    fontSize: '0.7rem', marginTop: '4px',
-                    color: residual < 0 ? 'var(--accent-red)' : 'var(--accent-emerald)',
+              </div>
+              <div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Confidence</div>
+                <div style={{ fontSize: '1.85rem', fontWeight: '900', color: 'var(--accent-yellow)' }}>
+                  {Math.round(data.confidence * 100)}%
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: '600' }}>Status</div>
+                <div style={{ fontSize: '1.85rem', fontWeight: '900', color: data.go_no_go === 'GO' ? 'var(--accent-emerald)' : 'var(--accent-red)' }}>
+                  {data.go_no_go}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Affected Sensors */}
+          <div className="card" style={{ padding: '20px', height: 'fit-content' }}>
+            <div className="card-header" style={{ marginBottom: '14px' }}><span className="card-title">Affected Sensors</span></div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {info.affected_sensors.map(sensor => {
+                const val = data.sensors?.[sensor]
+                const residual = data.residuals?.[`res_${sensor}`]
+                return (
+                  <div key={sensor} style={{
+                    padding: '10px 12px', background: 'rgba(128,128,128,0.07)',
+                    borderRadius: '6px', border: '1px solid var(--border-subtle)',
                   }}>
-                    Residual: {residual > 0 ? '+' : ''}{residual.toFixed(2)} &nbsp;
-                    {residual < 0 ? '↓ Below expected' : '↑ Above expected'}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ fontSize: '0.73rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {sensor.replace(/_/g, ' ')}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', fontFamily: 'var(--font-mono)' }}>
+                        <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--accent-yellow)' }}>
+                          {typeof val === 'number' ? val.toFixed(1) : '—'}
+                        </span>
+                        <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)' }}>{SENSOR_UNITS[sensor] || ''}</span>
+                        {typeof residual === 'number' && residual !== 0 && (
+                          <span style={{
+                            fontSize: '0.62rem', color: residual < 0 ? 'var(--accent-red)' : 'var(--accent-emerald)',
+                            fontWeight: '600', marginLeft: '6px',
+                          }}>
+                            {residual < 0 ? '↓' : '↑'} {Math.abs(residual).toFixed(1)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Recommended action — full-width horizontal layout */}
-      <div className="card" style={{ gridColumn: 'span 3', padding: '22px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '18px' }}>
-          <span className="card-title">Recommended Action</span>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{
-              padding: '3px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700',
-              background: 'rgba(128,128,128,0.12)', border: '1px solid var(--border-subtle)',
-              color: 'var(--text-secondary)', letterSpacing: '0.04em',
-            }}>
-              {info.recommendation.method}
-            </span>
-            <span style={{
-              padding: '3px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700',
-              background: info.recommendation.priority === 'Immediate'
-                ? 'rgba(239,68,68,0.13)' : info.recommendation.priority === 'High'
-                ? 'rgba(255,192,0,0.13)' : 'rgba(34,211,238,0.13)',
-              border: `1px solid ${info.recommendation.priority === 'Immediate'
-                ? 'rgba(239,68,68,0.4)' : info.recommendation.priority === 'High'
-                ? 'rgba(255,192,0,0.4)' : 'rgba(34,211,238,0.4)'}`,
-              color: info.recommendation.priority === 'Immediate'
-                ? 'var(--accent-red)' : info.recommendation.priority === 'High'
-                ? 'var(--accent-yellow)' : 'var(--accent-cyan)',
-              letterSpacing: '0.04em',
-            }}>
-              {info.recommendation.priority} Priority
-            </span>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', alignSelf: 'center' }}>
-              Zone: <span style={{ color: info.colorVar, fontWeight: '700' }}>{data.suspected_zone}</span>
-            </span>
+                )
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Two-column layout: left = summary, right = action steps */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'start' }}>
-
-          {/* Left — primary action summary + follow-up */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{
-              padding: '14px 16px',
-              background: 'rgba(239,68,68,0.07)',
-              border: '1px solid rgba(239,68,68,0.28)',
-              borderRadius: '8px',
-              color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: '600', lineHeight: '1.6',
-            }}>
-              {data.recommended_action || 'Inspect the detected zone and report findings to maintenance.'}
-            </div>
-            <div style={{
-              padding: '12px 14px',
-              background: 'rgba(128,128,128,0.06)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-            }}>
-              <div style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '5px' }}>Follow-up</div>
-              <div style={{ fontSize: '0.79rem', color: 'var(--text-secondary)', lineHeight: '1.55' }}>
-                {info.recommendation.follow_up}
-              </div>
-            </div>
-          </div>
-
-          {/* Right — action steps in 2×2 grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {info.recommendation.actions.map((action, i) => (
-              <div key={i} style={{
-                display: 'flex', gap: '10px', alignItems: 'flex-start',
-                padding: '12px', background: 'rgba(128,128,128,0.05)',
-                borderRadius: '8px', border: '1px solid var(--border-subtle)',
+        {/* Right Column: Recommendation */}
+        <div className="card" style={{ padding: '24px', height: 'fit-content' }}>
+          <div style={{ marginBottom: '18px' }}>
+            <div style={{ fontSize: '1.1rem', fontWeight: '900', color: 'var(--text-primary)', marginBottom: '10px' }}>Recommended Action</div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                padding: '4px 10px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: '700',
+                background: 'rgba(128,128,128,0.15)', border: '1px solid var(--border-subtle)',
+                color: 'var(--text-secondary)', letterSpacing: '0.04em',
               }}>
-                <span style={{
-                  minWidth: '22px', height: '22px', borderRadius: '50%',
-                  background: info.colorVar, color: '#000',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.62rem', fontWeight: '900', flexShrink: 0, marginTop: '1px',
-                }}>{i + 1}</span>
-                <span style={{ fontSize: '0.81rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>{action}</span>
-              </div>
-            ))}
+                {info.recommendation.method}
+              </span>
+              <span style={{
+                padding: '4px 10px', borderRadius: '5px', fontSize: '0.7rem', fontWeight: '700',
+                background: info.recommendation.priority === 'Immediate'
+                  ? 'rgba(239,68,68,0.15)' : info.recommendation.priority === 'High'
+                  ? 'rgba(255,192,0,0.15)' : 'rgba(34,211,238,0.15)',
+                border: `1px solid ${info.recommendation.priority === 'Immediate'
+                  ? 'rgba(239,68,68,0.5)' : info.recommendation.priority === 'High'
+                  ? 'rgba(255,192,0,0.5)' : 'rgba(34,211,238,0.5)'}`,
+                color: info.recommendation.priority === 'Immediate'
+                  ? 'var(--accent-red)' : info.recommendation.priority === 'High'
+                  ? 'var(--accent-yellow)' : 'var(--accent-cyan)',
+                letterSpacing: '0.04em',
+              }}>
+                {info.recommendation.priority} Priority
+              </span>
+            </div>
           </div>
 
+          <div style={{
+            padding: '12px 14px',
+            background: `linear-gradient(135deg, ${info.colorVar}10 0%, ${info.colorVar}05 100%)`,
+            border: `1.5px solid ${info.colorVar}40`,
+            borderRadius: '8px',
+            marginBottom: '16px',
+            color: 'var(--text-primary)', fontSize: '0.88rem', fontWeight: '600', lineHeight: '1.6',
+          }}>
+            {data.recommended_action || 'Inspect the detected zone and report findings to maintenance.'}
+          </div>
+
+          <div style={{ fontSize: '0.7rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+            Post-Repair Verification
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.55' }}>
+            {info.recommendation.follow_up}
+          </div>
         </div>
       </div>
 
-      {/* Inspection checklist */}
-      <div className="card" style={{ gridColumn: 'span 3', padding: '22px' }}>
-        <div className="card-header">
-          <span className="card-title">Inspection Checklist — {info.title}</span>
+      {/* Full-width Inspection Steps */}
+      <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>
+          Inspection Steps
         </div>
-        <div style={{
-          marginTop: '16px',
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '10px',
-        }}>
-          {info.inspection_steps.map((step, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+          {info.recommendation.actions.map((action, i) => (
             <div key={i} style={{
-              display: 'flex', gap: '12px', alignItems: 'flex-start',
-              padding: '13px', background: 'rgba(128,128,128,0.06)',
+              display: 'flex', gap: '10px', alignItems: 'flex-start',
+              padding: '12px 14px', background: 'rgba(128,128,128,0.06)',
               borderRadius: '8px', border: '1px solid var(--border-subtle)',
             }}>
-              <div style={{
+              <span style={{
                 minWidth: '26px', height: '26px', borderRadius: '50%',
                 background: info.colorVar, color: '#000',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.7rem', fontWeight: '900', flexShrink: 0,
+                fontSize: '0.65rem', fontWeight: '900', flexShrink: 0, fontFamily: 'var(--font-mono)',
+              }}>{i + 1}</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>{action}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Inspection Checklist */}
+      <div className="card" style={{ padding: '24px' }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '16px' }}>
+          Full Inspection Checklist
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+          {info.inspection_steps.map((step, i) => (
+            <div key={i} style={{
+              display: 'flex', gap: '10px', alignItems: 'flex-start',
+              padding: '12px 14px', background: 'rgba(128,128,128,0.06)',
+              borderRadius: '8px', border: '1px solid var(--border-subtle)',
+            }}>
+              <div style={{
+                minWidth: '24px', height: '24px', borderRadius: '50%',
+                background: info.colorVar, color: '#000',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.65rem', fontWeight: '900', flexShrink: 0,
               }}>
                 {i + 1}
               </div>
-              <div style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', lineHeight: '1.55' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.55' }}>
                 {step}
               </div>
             </div>
@@ -1239,9 +1508,17 @@ function App() {
   const wsRef = useRef(null)
   const demoWsRef = useRef(null)
   const debounceRef = useRef(null)
+  const csvInputRef = useRef(null)
+  const redirectTimerRef = useRef(null)
 
   const [daqStatus, setDaqStatus] = useState('Disconnected')
   const [isDark, setIsDark] = useState(true)
+  const [enableDaqStream, setEnableDaqStream] = useState(false)
+  const [ingestionNote, setIngestionNote] = useState('Choose live ECU data or CSV upload to start.')
+  const [csvFileName, setCsvFileName] = useState('')
+  const [csvRowCount, setCsvRowCount] = useState(0)
+  const [csvRows, setCsvRows] = useState([])
+  const [csvBusy, setCsvBusy] = useState(false)
 
   useEffect(() => {
     if (isDark) {
@@ -1250,6 +1527,14 @@ function App() {
       document.documentElement.classList.add('light')
     }
   }, [isDark])
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current)
+      }
+    }
+  }, [])
 
   const handleConnectDAQ = async () => {
     if (isDemoRunning) {
@@ -1269,11 +1554,105 @@ function App() {
       const data = await res.json();
       if (data.success) {
         setDaqStatus(data.status);
+        setIsConnected(true)
+        setEnableDaqStream(true)
+        setIngestionNote('OBD tool connected. DAQ is cleaning the stream now...')
+        return true
       }
+      setIngestionNote('OBD tool connection failed. Try again or use CSV upload.')
+      return false
     } catch (err) {
       console.error('Connection error:', err);
+      setIngestionNote('OBD connection failed. Check the tool and try again.')
+      return false
     }
   };
+
+  const handleLiveEcuStart = async () => {
+    setIngestionNote('Connecting OBD tool...')
+    const connected = await handleConnectDAQ()
+    if (connected) {
+      setActivePage('digital-twin')
+      setIngestionNote('DAQ is cleaning the live stream. Opening Digital Twin now.')
+    }
+  }
+
+  const handleCsvPick = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) {
+      return
+    }
+
+    setCsvFileName(file.name)
+    setCsvBusy(true)
+    setIngestionNote(file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+      ? 'Reading PDF and extracting sensor rows...'
+      : 'Reading CSV and normalizing sensor columns...')
+
+    try {
+      const text = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')
+        ? await extractPdfText(file)
+        : await file.text()
+      const rows = parseCsvText(text)
+      setCsvRows(rows)
+      setCsvRowCount(rows.length)
+
+      if (!rows.length) {
+        setIngestionNote('The file needs at least one data row after the header or table title.')
+        return
+      }
+
+      setIngestionNote(`Loaded ${rows.length} row${rows.length === 1 ? '' : 's'}. Ready to clean and continue.`)
+    } catch (err) {
+      console.error('File read error:', err)
+      setCsvFileName('')
+      setCsvRows([])
+      setCsvRowCount(0)
+      setIngestionNote('Unable to read the file. Please try another export.')
+    } finally {
+      setCsvBusy(false)
+    }
+  }
+
+  const handleCsvContinue = async () => {
+    if (!csvRows.length) {
+      setIngestionNote('Upload a CSV or PDF first.')
+      return
+    }
+
+    setCsvBusy(true)
+    setIngestionNote('Cleaning file data and sending it through the prediction pipeline...')
+
+    try {
+      const cleanedRow = cleanCsvSensorRow(csvRows[0], manualSensors)
+      const res = await fetch(`${API_BASE}/api/predict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cleanedRow),
+      })
+
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`HTTP ${res.status}: ${errorText.slice(0, 120)}`)
+      }
+
+      const data = await res.json()
+      setPredictionData(data)
+      if (data.sensors) {
+        setManualSensors(prev => ({ ...prev, ...data.sensors }))
+      } else {
+        setManualSensors(prev => ({ ...prev, ...cleanedRow }))
+      }
+      setHistory(prev => [...prev.slice(-100), data])
+      setActivePage('digital-twin')
+      setIngestionNote('CSV cleaned. Opening Digital Twin now.')
+    } catch (err) {
+      console.error('CSV ingest error:', err)
+      setIngestionNote(`CSV ingest failed: ${err.message}`)
+    } finally {
+      setCsvBusy(false)
+    }
+  }
 
   const handleDisconnectDAQ = async () => {
     try {
@@ -1281,24 +1660,33 @@ function App() {
       const data = await res.json();
       if (data.success) {
         setDaqStatus(data.status);
+        setEnableDaqStream(false)
       }
     } catch (err) {
       console.error('Disconnect error:', err);
     }
   };
 
-  // Fetch current DAQ status on mount
+  // Fetch and stream DAQ packets only after the user explicitly starts live ingestion
   useEffect(() => {
+    if (!enableDaqStream) {
+      return
+    }
+
     fetch(`${API_BASE}/api/dax/daq/status`)
       .then(res => res.json())
       .then(data => {
         setDaqStatus(data.status);
       })
       .catch(err => console.error('Error fetching DAQ status:', err));
-  }, []);
+  }, [enableDaqStream]);
 
   // Globally stream real-time DAQ packets into prediction state
   useEffect(() => {
+    if (!enableDaqStream) {
+      return undefined
+    }
+
     let ws = null;
     const connectDAQ = () => {
       ws = new WebSocket(`${WS_BASE}/ws/daq`);
@@ -1382,7 +1770,9 @@ function App() {
       };
       ws.onclose = () => {
         setDaqStatus('Disconnected');
-        setTimeout(connectDAQ, 3000);
+        if (enableDaqStream) {
+          setTimeout(connectDAQ, 3000);
+        }
       };
     };
 
@@ -1391,7 +1781,7 @@ function App() {
     return () => {
       if (ws) ws.close();
     };
-  }, []);
+  }, [enableDaqStream]);
 
   useEffect(() => {
     if (daqStatus === 'Connected') {
@@ -1752,7 +2142,7 @@ function App() {
     }
   }, [simZone, simSeverity])
 
-  // Auto-run simulation or update running demo when selection changes
+  // Only update the running demo when it is explicitly active.
   useEffect(() => {
     if (isDemoRunning) {
       if (demoWsRef.current && demoWsRef.current.readyState === WebSocket.OPEN) {
@@ -1761,8 +2151,6 @@ function App() {
           leak_severity: simSeverity
         }))
       }
-    } else if (daqStatus !== 'Connected') {
-      runSimulation()
     }
   }, [simZone, simSeverity, isDemoRunning, runSimulation, daqStatus])
 
@@ -1783,7 +2171,7 @@ function App() {
     severity: 'NONE',
     flow_loss_pct: 0,
     go_no_go: 'GO',
-    recommended_action: 'Connect to backend to start monitoring.',
+    recommended_action: 'Engine diagnostics system ready for analysis.',
     residuals: {},
     energy_field: { matrix: Array(6).fill(Array(6).fill(0)), global_deviation: 0, cosine_similarity: 1, most_disrupted_sensor: 'N/A' },
     sensors: {},
@@ -1799,6 +2187,7 @@ function App() {
             <main className="main-content" style={{ width: '100%', padding: '1rem' }}>
               <div className="main-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
                 <h2>
+                  {activePage === 'ingestion' && 'Ingestion'}
                   {activePage === 'dashboard' && 'Real-Time Dashboard'}
                   {activePage === 'engine' && 'Analysis'}
                   {activePage === 'history' && 'Detection History'}
@@ -1891,6 +2280,21 @@ function App() {
             <ZoneDetailPage
               data={data}
               onBack={() => setActivePage(prevPage)}
+            />
+          )}
+
+          {/* Ingestion Page */}
+          {activePage === 'ingestion' && (
+            <IngestionGateway
+              liveStatus={daqStatus}
+              csvFileName={csvFileName}
+              csvRowCount={csvRowCount}
+              ingestionNote={ingestionNote}
+              csvBusy={csvBusy}
+              csvInputRef={csvInputRef}
+              onConnectLive={handleLiveEcuStart}
+              onCsvPick={handleCsvPick}
+              onCsvContinue={handleCsvContinue}
             />
           )}
 
