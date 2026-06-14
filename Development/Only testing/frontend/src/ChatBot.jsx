@@ -4,8 +4,8 @@ import { Iphone16Pro } from './Iphone16Pro'
 const API_BASE = 'http://localhost:8000'
 
 // Phone dimensions
-const PW = 334   // phone width  — narrower
-const PH = 572   // phone height — slightly shorter
+const PW = 368   // phone width  — wider
+const PH = 590   // phone height — shorter
 const PAD = 21   // SVG screen inset
 const SR = 40    // screen border-radius (scaled)
 const IW = 90    // island width
