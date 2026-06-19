@@ -26,6 +26,11 @@ from pathlib import Path
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BACKEND_DIR)
 
+# Load .env (gitignored) before any module reads secrets from the environment —
+# must happen before `api.chat_api` is imported below.
+from dotenv import load_dotenv
+load_dotenv(os.path.join(BACKEND_DIR, ".env"))
+
 from config import EF_CHANNELS, ML_CONFIG
 from engine_profiles import active_profile, load_profile, list_profile_ids
 from twins.intake_twin import IntakeTwinModel

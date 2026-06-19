@@ -7,15 +7,16 @@ import json
 
 router = APIRouter(prefix="/api/chat", tags=["Chat Advisor"])
 
-# Configuration
-NVIDIA_API_KEY = "***REMOVED-LEAKED-API-KEY***"
+# Configuration — read from environment, never hardcode a credential here again.
+# Set NVIDIA_API_KEY in your local .env (gitignored) or shell environment.
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 MODEL = "google/gemma-3-12b-it"
 
 client = OpenAI(
     base_url=NVIDIA_BASE_URL,
-    api_key=NVIDIA_API_KEY
-)
+    api_key=NVIDIA_API_KEY or "missing-key"
+) if NVIDIA_API_KEY else None
 
 class ChatRequest(BaseModel):
     message: str
@@ -53,6 +54,8 @@ def get_project_context():
 
 @router.post("/ask")
 async def ask_chatbot(request: Request, body: ChatRequest):
+    if client is None:
+        raise HTTPException(503, "Chat advisor not configured — set NVIDIA_API_KEY in the environment.")
     try:
         predictor = request.app.state.predictor
         
