@@ -26,6 +26,11 @@ env/
 Development/Final/backend/models/
 Development/Final/backend/data/
 
+# ─── Large 3D assets (exceed GitHub's 100MB file limit) ───
+*.glb
+*.blend
+*.FCStd
+
 # ─── Node / Frontend ──────────────────────────────────────
 node_modules/
 npm-debug.log*

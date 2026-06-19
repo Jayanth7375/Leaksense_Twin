@@ -1,44 +1,13 @@
 """
-LeakSense Twin — Engine Configuration & Constants
-Cat C18 Diesel Engine Parameters
+LeakSense Twin — Engine-Agnostic Configuration
+Engine-specific physics constants and zone topology now live in
+engine_profiles/*.json (see engine_profiles/base.py for the schema).
+This file holds only what's genuinely independent of which engine is
+active: the 31-feature schema, ML hyperparameters, noise model, and the
+steady-state filter.
 """
 
-# ─── CAT C18 Engine Specifications ────────────────────────────────────────────
-ENGINE_CONFIG = {
-    "name": "Cat C18",
-    "configuration": "Inline 6, 4-Stroke-Cycle Diesel",
-    "displacement_L": 18.1,
-    "n_cylinders": 6,
-    "bore_mm": 145,
-    "stroke_mm": 183,
-    "compression_ratio": 16.3,
-    "max_power_kW": 597,
-    "max_power_rpm": 2100,
-    "max_torque_Nm": 3655,
-    "max_torque_rpm": 1400,
-    "aspiration": "Twin-Turbocharged Aftercooled (DITA)",
-    "ecu": "ADEM A4",
-    "communication": "SAE J1939",
-    "fuel_system": "MEUI injection",
-}
-
-# ─── Thermodynamic Constants ──────────────────────────────────────────────────
-DISPLACEMENT = 18.1          # liters
-N_CYLINDERS = 6
-COMPRESSION_RATIO = 16.3
-R_AIR = 287.0                # J/(kg·K)
-CP_AIR = 1005.0              # J/(kg·K)
-GAMMA = 1.4                  # Heat capacity ratio for air
-CAC_EFFECTIVENESS = 0.88     # Nominal charge air cooler effectiveness
-TURBO_EFF_COMPRESSOR = 0.78  # Nominal isentropic efficiency
-TURBO_EFF_TURBINE = 0.82     # Nominal isentropic efficiency
-VE_BASE = 0.92               # Volumetric efficiency at rated
-LHV_DIESEL = 42800.0         # kJ/kg — Lower Heating Value
-COMBUSTION_EFF = 0.97        # Combustion efficiency
-MAP_AMBIENT = 101.325        # kPa — standard atmospheric pressure
-T_AMBIENT_K = 298.15         # K — standard ambient temperature (25°C)
-
-# ─── Sensor Channels ─────────────────────────────────────────────────────────
+# ─── Sensor Channels (engine-agnostic feature schema) ─────────────────────────
 RAW_SENSOR_COLS = [
     'RPM', 'MAF', 'MAP_intake', 'MAP_boost', 'MAP_cac_in', 'MAP_cac_out',
     'T_intake', 'T_boost', 'T_cac_out', 'T_exh_manifold', 'T_dpf_in',
@@ -54,20 +23,9 @@ RESIDUAL_COLS = [
 EF_CHANNELS = ['MAF', 'MAP_boost', 'MAP_cac_out', 'T_cac_out',
                'T_exh_manifold', 'dP_dpf', 'RPM']
 
-ZONE_NAMES = [
-    "No Leak / Healthy",
-    "Zone 1 — Intake (Airflow meter → Compressor inlet)",
-    "Zone 2 — Charge Air (Post-compressor → CAC inlet)",
-    "Zone 3 — CAC/Manifold (CAC → Intake manifold)",
-    "Zone 4 — Exhaust Manifold (Manifold → Turbo turbine)",
-    "Zone 5 — DPF/SCR (Aftertreatment system)"
-]
-
 # ─── ML Model Hyperparameters ─────────────────────────────────────────────────
 ML_CONFIG = {
     "input_dim": 31,
-    "hidden_dim": 64,
-    "n_classes": 6,
     "dropout": 0.3,
     "learning_rate": 1e-3,
     "weight_decay": 1e-4,

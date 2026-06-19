@@ -1358,6 +1358,97 @@ body {
   transform: translateY(-2px);
 }
 
+.engine-select-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(252,212,65,0.06), transparent 60%),
+    var(--bg-primary, #000);
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 32px;
+  padding: 24px;
+}
+
+.engine-select-title {
+  text-align: center;
+}
+
+.engine-select-title h1 {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text-primary, #fff);
+  margin-bottom: 8px;
+}
+
+.engine-select-title p {
+  color: var(--text-secondary, #9aa5b1);
+  font-size: 0.95rem;
+}
+
+.engine-select-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 900px;
+}
+
+.engine-select-card {
+  width: 320px;
+  background: var(--bg-glass, rgba(255,255,255,0.04));
+  border: 1px solid var(--border-medium);
+  border-radius: 16px;
+  padding: 24px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-align: left;
+}
+
+.engine-select-card:hover:not(.disabled) {
+  border-color: var(--accent-cyan, #1ecfac);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(30,207,172,0.15);
+}
+
+.engine-select-card.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.engine-select-card .engine-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary, #fff);
+  margin-bottom: 6px;
+}
+
+.engine-select-card .engine-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #9aa5b1);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.engine-select-card .engine-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.engine-badge-pill {
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
 .chatbot-icon {
   width: 40px;
   height: 40px;

@@ -25,6 +25,51 @@ function IntroVideo({ onComplete }) {
   );
 }
 
+// ─── Engine Selector ──────────────────────────────────────────────
+function EngineSelector({ engines, onSelect, isLoading, error }) {
+  return (
+    <div className="engine-select-container">
+      <div className="engine-select-title">
+        <h1>Select Engine to Test</h1>
+        <p>Choose which Caterpillar engine is on the test stand. You can switch later from the dashboard header.</p>
+        {error && <p style={{ color: 'var(--accent-red)', marginTop: '10px' }}>{error}</p>}
+      </div>
+      <div className="engine-select-grid">
+        {engines.map(eng => (
+          <div
+            key={eng.id}
+            className={`engine-select-card ${!eng.trained || isLoading ? 'disabled' : ''}`}
+            onClick={() => eng.trained && !isLoading && onSelect(eng.id)}
+          >
+            <div className="engine-name">{eng.name}</div>
+            <div className="engine-desc">{eng.description}</div>
+            <div className="engine-badges">
+              <span className="engine-badge-pill" style={{
+                background: eng.calibrated ? 'rgba(16,185,129,0.15)' : 'rgba(252,212,65,0.15)',
+                color: eng.calibrated ? 'var(--accent-emerald)' : 'var(--accent-yellow)',
+              }}>
+                {eng.calibrated ? 'Calibrated' : 'Uncalibrated'}
+              </span>
+              <span className="engine-badge-pill" style={{
+                background: eng.trained ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                color: eng.trained ? 'var(--accent-emerald)' : 'var(--accent-red)',
+              }}>
+                {eng.trained ? 'Model Ready' : 'Not Trained Yet'}
+              </span>
+              <span className="engine-badge-pill" style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}>
+                {eng.n_zones} zones
+              </span>
+            </div>
+          </div>
+        ))}
+        {engines.length === 0 && !isLoading && (
+          <p style={{ color: 'var(--text-secondary)' }}>No engines found — is the backend running?</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const API_BASE = 'http://localhost:8000'
 const WS_BASE = 'ws://localhost:8000'
 
@@ -35,6 +80,7 @@ const ZONE_NAMES = [
   'Zone 3 — CAC/Manifold',
   'Zone 4 — Exhaust Manifold',
   'Zone 5 — DPF/SCR',
+  'Zone 6 — Turbine Outlet/Pre-DPF',
 ]
 
 const EF_CHANNELS = ['MAF', 'MAP_boost', 'MAP_cac_out', 'T_cac_out', 'T_exh', 'dP_dpf']
@@ -47,7 +93,7 @@ const SENSOR_UNITS = {
 }
 
 // ─── Sidebar Component ──────────────────────────────────────────
-function Sidebar({ activePage, setActivePage, isConnected }) {
+function Sidebar({ activePage, setActivePage, isConnected, engineName, onSwitchEngine }) {
   const navItems = [
     { id: 'dashboard', icon: '', label: 'Dashboard' },
     { id: 'engine', icon: '', label: 'Analysis' },
@@ -63,7 +109,7 @@ function Sidebar({ activePage, setActivePage, isConnected }) {
           <div className="sidebar-logo-icon">L</div>
           <div>
             <h1>LeakSense Twin</h1>
-            <span>Cat C18 Engine Diagnostics</span>
+            <span>{engineName || 'Engine Diagnostics'}</span>
           </div>
         </div>
       </div>
@@ -83,11 +129,11 @@ function Sidebar({ activePage, setActivePage, isConnected }) {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="engine-badge">
+        <div className="engine-badge" style={{ cursor: 'pointer' }} onClick={onSwitchEngine} title="Switch engine">
           <span className="dot" style={{
             background: isConnected ? 'var(--accent-emerald)' : 'var(--accent-red)',
           }}></span>
-          <span>CAT C18 • ADEM A4</span>
+          <span>{engineName || 'No Engine'} • Switch</span>
         </div>
       </div>
     </aside>
@@ -359,19 +405,20 @@ function ZoneProbabilities({ probs }) {
 }
 
 // ─── Engine Diagram ──────────────────────────────────────────────
-function EngineDiagram({ zoneIdx, leakDetected, onZoneClick }) {
+function EngineDiagram({ zoneIdx, leakDetected, onZoneClick, engineName }) {
   const zones = [
     { id: 1, name: 'Zone 1', desc: 'Intake — Airflow meter → Compressor' },
     { id: 2, name: 'Zone 2', desc: 'Charge Air — Compressor → CAC' },
     { id: 3, name: 'Zone 3', desc: 'CAC/Manifold — CAC → Intake ports' },
     { id: 4, name: 'Zone 4', desc: 'Exhaust — Manifold → Turbine' },
     { id: 5, name: 'Zone 5', desc: 'Aftertreatment — DPF → SCR' },
+    { id: 6, name: 'Zone 6', desc: 'Turbine outlet → DPF inlet' },
   ]
 
   return (
     <div className="card engine-card">
       <div className="card-header">
-        <span className="card-title">Cat C18 Engine — Zone Map (Click to Simulate)</span>
+        <span className="card-title">{engineName || 'Engine'} — Zone Map (Click to Simulate)</span>
         <span className="card-icon"></span>
       </div>
       <div className="engine-diagram">
@@ -677,6 +724,63 @@ function App() {
   const demoWsRef = useRef(null)
   const debounceRef = useRef(null)
 
+  // Engine selection
+  const [engines, setEngines] = useState([])
+  const [currentEngine, setCurrentEngine] = useState(null)
+  const [showEngineSelector, setShowEngineSelector] = useState(false)
+  const [isSwitchingEngine, setIsSwitchingEngine] = useState(false)
+  const [engineSwitchError, setEngineSwitchError] = useState(null)
+
+  // Always ask the user to pick an engine on first load — the backend may
+  // already have one "active" from a previous session/default, but that's
+  // not the same as this user having chosen one for this session.
+  const fetchEngines = useCallback(() => {
+    fetch(`${API_BASE}/api/engines`)
+      .then(res => res.json())
+      .then(data => setEngines(data.engines || []))
+      .catch(err => console.error('Error fetching engines:', err))
+  }, [])
+
+  useEffect(() => {
+    fetchEngines()
+    setShowEngineSelector(true)
+  }, [])
+
+  const selectEngine = useCallback(async (engineId) => {
+    setIsSwitchingEngine(true)
+    setEngineSwitchError(null)
+    try {
+      const res = await fetch(`${API_BASE}/api/engine/select`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ engine: engineId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to switch engine')
+      }
+      // Stop any running demo — it's tied to the previous engine's stream
+      if (demoWsRef.current) {
+        demoWsRef.current.close()
+        demoWsRef.current = null
+      }
+      setIsDemoRunning(false)
+      setIsConnected(false)
+      // Reset session state — confidence/history from the old engine isn't
+      // meaningful mixed with the new one
+      setPredictionData(null)
+      setHistory([])
+      setCurrentEngine({ id: engineId, name: data.engine, n_zones: data.n_zones, calibrated: data.calibrated, trained: true, active: true })
+      setShowEngineSelector(false)
+      fetchEngines()
+    } catch (err) {
+      console.error('Engine switch error:', err)
+      setEngineSwitchError(err.message || 'Failed to switch engine')
+    } finally {
+      setIsSwitchingEngine(false)
+    }
+  }, [fetchEngines])
+
   // Acoustic states
   const [audioFiles, setAudioFiles] = useState({ good: [], leak: [] })
   const [selectedCategory, setSelectedCategory] = useState('good')
@@ -925,8 +1029,22 @@ function App() {
   return (
     <>
       {showIntro && <IntroVideo onComplete={() => setShowIntro(false)} />}
+      {!showIntro && showEngineSelector && (
+        <EngineSelector
+          engines={engines}
+          onSelect={selectEngine}
+          isLoading={isSwitchingEngine}
+          error={engineSwitchError}
+        />
+      )}
       <div className="app-container">
-      <Sidebar activePage={activePage} setActivePage={setActivePage} isConnected={isConnected} />
+      <Sidebar
+        activePage={activePage}
+        setActivePage={setActivePage}
+        isConnected={isConnected}
+        engineName={currentEngine?.name}
+        onSwitchEngine={() => { setEngineSwitchError(null); fetchEngines(); setShowEngineSelector(true) }}
+      />
 
       <main className="main-content">
         <div className="main-header">
@@ -966,6 +1084,7 @@ function App() {
               <option value={3}>Zone 3 — CAC/Manifold</option>
               <option value={4}>Zone 4 — Exhaust</option>
               <option value={5}>Zone 5 — DPF/SCR</option>
+              <option value={6}>Zone 6 — Turbine Outlet/Pre-DPF</option>
             </select>
 
             <select className="demo-select" value={simSeverity} onChange={e => setSimSeverity(Number(e.target.value))}>
@@ -1015,10 +1134,11 @@ function App() {
               acousticResult={acousticResult}
               isLoading={isAcousticLoading}
             />
-            <EngineDiagram 
-              zoneIdx={data.suspected_zone_idx} 
-              leakDetected={data.leak_detected} 
+            <EngineDiagram
+              zoneIdx={data.suspected_zone_idx}
+              leakDetected={data.leak_detected}
               onZoneClick={handleZoneClick}
+              engineName={currentEngine?.name}
             />
             <GoNoGoIndicator status={data.go_no_go} />
             <ConfidenceRing confidence={data.confidence} leakDetected={data.leak_detected} />

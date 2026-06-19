@@ -1,6 +1,10 @@
 """
-LeakSense Twin — Zone 3: Exhaust Digital Twin
+LeakSense Twin — Zone 3/4/5/6: Exhaust Digital Twin
 Physics: Energy balance — predicts exhaust temperatures and back-pressure.
+
+Engine-specific coefficients come from an EngineProfile (see
+engine_profiles/) instead of being hardcoded, so the same physics model
+works for any engine with a calibrated profile.
 """
 
 import numpy as np
@@ -9,45 +13,30 @@ import joblib
 
 class ExhaustTwinModel:
     """
-    Physics-based Exhaust Zone Digital Twin for Cat C18.
+    Physics-based Exhaust Zone Digital Twin.
     Models: Combustion → exhaust manifold → turbine expansion → aftertreatment.
     """
 
-    # Constants
-    N_CYLINDERS = 6
-    CP_AIR = 1005.0          # J/(kg·K)
-    GAMMA = 1.4
-    TURBO_EFF_TURBINE = 0.82
-    LHV_DIESEL = 42800.0     # kJ/kg
-    COMBUSTION_EFF = 0.97
-
-    def __init__(self):
-        """Initialize exhaust model parameters."""
+    def __init__(self, profile):
+        self.profile = profile
         self.correction_t_exh = 1.0
         self.correction_dp = 1.0
         # DPF loading factor (increases with soot accumulation)
         self.dpf_loading = 1.0
 
     def turbine_pr(self, rpm: float, maf_kgh: float) -> float:
-        """
-        Turbine pressure ratio as function of RPM and mass flow.
-        Simplified model based on C18 turbine map.
-        """
-        # Normalized operating point
-        rpm_norm = rpm / 2100.0
-        maf_norm = maf_kgh / 1200.0
-        # Pressure ratio typically 1.8-3.5 for C18 at rated
-        PR = 1.5 + 1.2 * rpm_norm + 0.8 * maf_norm
-        return np.clip(PR, 1.2, 4.0)
+        """Turbine pressure ratio as a function of RPM and mass flow."""
+        e = self.profile.exhaust
+        rpm_norm = rpm / e.turbine_rpm_norm
+        maf_norm = maf_kgh / e.turbine_maf_norm
+        PR = e.turbine_pr_const + e.turbine_pr_rpm_coeff * rpm_norm + e.turbine_pr_maf_coeff * maf_norm
+        return np.clip(PR, e.turbine_pr_clip_min, e.turbine_pr_clip_max)
 
     def dpf_pressure_drop(self, maf_kgh: float, rpm: float) -> float:
-        """
-        DPF back-pressure model.
-        Depends on exhaust flow rate and filter loading state.
-        """
+        """DPF back-pressure model — depends on exhaust flow rate and filter loading state."""
+        e = self.profile.exhaust
         flow_rate = maf_kgh / 3600.0  # kg/s
-        # Base pressure drop + loading contribution
-        dp_base = 2.5 * (flow_rate ** 1.8)  # kPa
+        dp_base = e.dpf_dp_coeff * (flow_rate ** e.dpf_dp_exponent)  # kPa
         dp_loaded = dp_base * self.dpf_loading
         return dp_loaded * self.correction_dp
 
@@ -65,9 +54,12 @@ class ExhaustTwinModel:
         Returns:
             dict with T_exh_manifold_pred, T_post_turbine_pred, dP_dpf_pred
         """
+        p = self.profile
+        e = p.exhaust
+
         # Fuel mass flow rate (kg/s)
         # fuel_qty is per stroke per cylinder; 4-stroke → 1 injection per 2 revs
-        fuel_mass_flow = fuel_qty_mg * 1e-6 * (rpm / 2.0 / 60.0) * self.N_CYLINDERS
+        fuel_mass_flow = fuel_qty_mg * 1e-6 * (rpm / 2.0 / 60.0) * e.n_cylinders
 
         # Air mass flow (kg/s)
         air_mass_flow = maf_kgh / 3600.0
@@ -76,23 +68,23 @@ class ExhaustTwinModel:
         total_flow = air_mass_flow + fuel_mass_flow
 
         # Combustion temperature (first law of thermodynamics)
-        if total_flow > 0 and self.CP_AIR > 0:
-            delta_T = (fuel_mass_flow * self.LHV_DIESEL * 1000.0 * self.COMBUSTION_EFF) / \
-                      (total_flow * self.CP_AIR)
+        if total_flow > 0 and p.cp_air > 0:
+            delta_T = (fuel_mass_flow * e.lhv_diesel * 1000.0 * e.combustion_eff) / \
+                      (total_flow * p.cp_air)
             T_exh_manifold = t_cac_out_k + delta_T
         else:
             T_exh_manifold = t_cac_out_k + 400.0
 
         T_exh_manifold *= self.correction_t_exh
 
-        # Clamp to realistic range (450-900°C exhaust)
-        T_exh_manifold = np.clip(T_exh_manifold, 723.15, 1173.15)
+        # Clamp to realistic range
+        T_exh_manifold = np.clip(T_exh_manifold, e.t_exh_clip_min_k, e.t_exh_clip_max_k)
 
         # Turbine expansion
         PR_turbine = self.turbine_pr(rpm, maf_kgh)
         T_post_turbine = T_exh_manifold * (
-            1.0 - self.TURBO_EFF_TURBINE * (
-                1.0 - PR_turbine ** (-(self.GAMMA - 1) / self.GAMMA)
+            1.0 - e.turbo_eff_turbine * (
+                1.0 - PR_turbine ** (-(p.gamma - 1) / p.gamma)
             )
         )
 
@@ -100,8 +92,8 @@ class ExhaustTwinModel:
         dP_dpf = self.dpf_pressure_drop(maf_kgh, rpm)
 
         # DPF inlet/outlet temperatures (with heat loss)
-        T_dpf_in = T_post_turbine - 30.0   # ~30K loss in exhaust pipe
-        T_dpf_out = T_dpf_in - 50.0        # ~50K across DPF
+        T_dpf_in = T_post_turbine - e.dpf_in_loss_k
+        T_dpf_out = T_dpf_in - e.dpf_out_loss_k
 
         return {
             'T_exh_manifold_pred': float(T_exh_manifold),

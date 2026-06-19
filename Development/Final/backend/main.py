@@ -26,13 +26,16 @@ from pathlib import Path
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, BACKEND_DIR)
 
-from config import ZONE_NAMES, MAP_AMBIENT, EF_CHANNELS, ML_CONFIG
+from config import EF_CHANNELS, ML_CONFIG
+from engine_profiles import active_profile, load_profile, list_profile_ids
 from twins.intake_twin import IntakeTwinModel
 from twins.charge_air_twin import ChargeAirTwinModel
 from twins.exhaust_twin import ExhaustTwinModel
-from ml.models import LeakSenseNet, LeakLocalizationNet
-from ml.ensemble import LeakSenseEnsemble
+from ml.models import LeakNet
 from ml.energy_field import EnergyFieldDetector
+
+# Active engine profile — set LEAKSENSE_ENGINE env var to switch (default: c18)
+PROFILE = active_profile()
 
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
@@ -61,7 +64,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="LeakSense Twin API",
     version="1.0.0",
-    description="AI-powered leak detection & localization for Cat C18 diesel engines",
+    description=f"AI-powered leak detection & localization for {PROFILE.name} diesel engines",
     lifespan=lifespan,
 )
 
@@ -80,7 +83,7 @@ from api.chat_api import router as chat_router
 app.include_router(chat_router)
 
 # ─── Model Paths ──────────────────────────────────────────────────────────────
-MODELS_DIR = os.path.join(BACKEND_DIR, "models")
+MODELS_DIR = os.path.join(BACKEND_DIR, "models", PROFILE.artifact_dir)
 
 # ─── History Storage ──────────────────────────────────────────────────────────
 prediction_history: List[Dict] = []
@@ -91,14 +94,13 @@ MAX_HISTORY = 500
 class UnifiedPredictor:
     """Main prediction engine combining digital twins, ML, and energy field."""
 
-    def __init__(self):
+    def __init__(self, profile=None):
+        self.profile = profile or PROFILE
         self.intake_twin = None
         self.charge_twin = None
         self.exhaust_twin = None
         self.ef_detector = None
         self.leak_net = None
-        self.loc_net = None
-        self.ensemble = None
         self.scaler = None
         self.config = None
         self.window = deque(maxlen=30)
@@ -106,59 +108,48 @@ class UnifiedPredictor:
         self._load_models()
 
     def _load_models(self):
-        """Load all trained models from disk."""
+        """Load all trained models from disk for this predictor's engine profile."""
+        models_dir = os.path.join(BACKEND_DIR, "models", self.profile.artifact_dir)
         try:
             # Digital Twins
             self.intake_twin = IntakeTwinModel.load(
-                os.path.join(MODELS_DIR, "intake_twin.joblib"))
+                os.path.join(models_dir, "intake_twin.joblib"))
             self.charge_twin = ChargeAirTwinModel.load(
-                os.path.join(MODELS_DIR, "charge_air_twin.joblib"))
+                os.path.join(models_dir, "charge_air_twin.joblib"))
             self.exhaust_twin = ExhaustTwinModel.load(
-                os.path.join(MODELS_DIR, "exhaust_twin.joblib"))
+                os.path.join(models_dir, "exhaust_twin.joblib"))
             print("  [OK] Digital twins loaded")
 
             # Energy Field
             self.ef_detector = EnergyFieldDetector.load(
-                os.path.join(MODELS_DIR, "energy_field_detector.joblib"))
+                os.path.join(models_dir, "energy_field_detector.joblib"))
             print("  [OK] Energy field detector loaded")
 
             # Scaler
-            self.scaler = joblib.load(os.path.join(MODELS_DIR, "scaler.joblib"))
+            self.scaler = joblib.load(os.path.join(models_dir, "scaler.joblib"))
 
             # Config
-            self.config = joblib.load(os.path.join(MODELS_DIR, "config.joblib"))
+            self.config = joblib.load(os.path.join(models_dir, "config.joblib"))
             input_dim = self.config.get('input_dim', 31)
+            n_classes = self.config.get('n_classes', self.profile.n_classes)
 
-            # Neural nets
-            self.leak_net = LeakSenseNet(input_dim=input_dim)
+            # LeakNet — unified detection + localization model
+            self.leak_net = LeakNet(input_dim=input_dim, n_classes=n_classes)
             self.leak_net.load_state_dict(
-                torch.load(os.path.join(MODELS_DIR, "leak_sense_net.pth"),
+                torch.load(os.path.join(models_dir, "leak_net.pth"),
                            map_location='cpu', weights_only=True))
             self.leak_net.eval()
+            print("  [OK] LeakNet loaded")
 
-            self.loc_net = LeakLocalizationNet(input_dim=input_dim, n_classes=6)
-            self.loc_net.load_state_dict(
-                torch.load(os.path.join(MODELS_DIR, "leak_localization_net.pth"),
-                           map_location='cpu', weights_only=True))
-            self.loc_net.eval()
-            print("  [OK] Neural networks loaded")
-
-            # Ensemble
-            self.ensemble = LeakSenseEnsemble.load(
-                os.path.join(MODELS_DIR, "ensemble.joblib"))
-            self.ensemble.leak_net = self.leak_net
-            self.ensemble.loc_net = self.loc_net
-            print("  [OK] Ensemble loaded")
-
-            print("  [OK] All models loaded successfully!")
+            print(f"  [OK] All models loaded successfully for {self.profile.name}!")
 
         except Exception as e:
             print(f"  [WARN] Model loading error: {e}")
             print("  [INFO] Run 'python ml/train.py' to train models first.")
             # Initialize default twins for demo mode
-            self.intake_twin = IntakeTwinModel()
-            self.charge_twin = ChargeAirTwinModel()
-            self.exhaust_twin = ExhaustTwinModel()
+            self.intake_twin = IntakeTwinModel(self.profile)
+            self.charge_twin = ChargeAirTwinModel(self.profile)
+            self.exhaust_twin = ExhaustTwinModel(self.profile)
 
     def predict(self, sensor_data: Dict) -> Dict:
         """
@@ -166,7 +157,7 @@ class UnifiedPredictor:
         1. Extract sensor values
         2. Compute digital twin residuals
         3. Build feature vector
-        4. Run ML ensemble
+        4. Run LeakNet (unified detection + localization)
         5. Compute energy field
         6. Generate final result
         """
@@ -191,12 +182,13 @@ class UnifiedPredictor:
         t_cac_k = t_cac_out + 273.15
 
         # ── Digital Twin Residuals ────────────────────────────────────────
+        map_ambient = self.profile.map_ambient
         residuals = {}
         try:
-            maf_pred = self.intake_twin.predict(rpm, MAP_AMBIENT, t_intake_k, fuel_qty)
+            maf_pred = self.intake_twin.predict(rpm, map_ambient, t_intake_k, fuel_qty)
             residuals['res_MAF'] = maf - maf_pred
 
-            ca = self.charge_twin.predict(maf, rpm, t_intake_k, MAP_AMBIENT)
+            ca = self.charge_twin.predict(maf, rpm, t_intake_k, map_ambient)
             residuals['res_MAP_boost'] = map_boost - ca['MAP_boost_pred']
             residuals['res_T_boost'] = t_boost - (ca['T_boost_pred'] - 273.15)
             residuals['res_T_cac_out'] = t_cac_out - (ca['T_cac_out_pred'] - 273.15)
@@ -225,13 +217,13 @@ class UnifiedPredictor:
                residuals.get('res_MAP_intake', 0)]
 
         # Derived ratios
-        pr_comp = map_boost / (MAP_AMBIENT + 1e-8)
+        pr_comp = map_boost / (map_ambient + 1e-8)
         t_diff = abs(t_boost - t_intake) + 1e-8
-        cac_eff = (t_boost - t_cac_out) / t_diff if t_diff > 1 else 0.88
+        cac_eff = (t_boost - t_cac_out) / t_diff if t_diff > 1 else self.profile.charge_air.cac_effectiveness
         t_exh_ratio = t_exh / (t_cac_out + 273.15 + 1e-8)
         boost_maf = map_boost / (maf + 1e-8)
         dpf_ratio = dP_dpf / (map_boost + 1e-8)
-        fuel_flow = fuel_qty * 1e-6 * (rpm / 120.0) * 6
+        fuel_flow = fuel_qty * 1e-6 * (rpm / 120.0) * self.profile.intake.n_cylinders
         afr = (maf / 3600.0) / (fuel_flow + 1e-8)
         ratios = [pr_comp, cac_eff, t_exh_ratio, boost_maf, dpf_ratio, afr]
 
@@ -244,7 +236,7 @@ class UnifiedPredictor:
         # ── ML Prediction ─────────────────────────────────────────────────
         confidence = 0.5
         zone_idx = 0
-        zone_probs = [1.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        zone_probs = [1.0] + [0.0] * (self.profile.n_classes - 1)
 
         try:
             if self.scaler is not None:
@@ -254,17 +246,12 @@ class UnifiedPredictor:
 
             feat_tensor = torch.FloatTensor(scaled)
 
-            if self.ensemble is not None:
-                result = self.ensemble.predict(feat_tensor, scaled)
-                confidence = result['confidence']
-                zone_idx = result['suspected_zone_idx']
-                zone_probs = result.get('zone_probabilities', zone_probs)
-            elif self.leak_net is not None:
+            if self.leak_net is not None:
                 with torch.no_grad():
-                    confidence = float(self.leak_net(feat_tensor).item())
-                    loc_probs = self.loc_net(feat_tensor).numpy()[0]
-                    zone_idx = int(np.argmax(loc_probs))
-                    zone_probs = loc_probs.tolist()
+                    probs = torch.softmax(self.leak_net(feat_tensor), dim=1).numpy()[0]
+                    zone_idx = int(np.argmax(probs))
+                    confidence = float(1.0 - probs[0])
+                    zone_probs = probs.tolist()
         except Exception as e:
             print(f"  ML prediction error: {e}")
 
@@ -298,14 +285,7 @@ class UnifiedPredictor:
             flow_loss_pct = 0.0
 
         # ── Recommended action ────────────────────────────────────────────
-        action_map = {
-            0: "System healthy - continue operation",
-            1: "Inspect intake ducting between airflow meter and compressor inlet. Check hose clamps and silicone couplers.",
-            2: "Check boost pipe connections between compressor outlet and CAC inlet. Inspect for cracked charge pipes.",
-            3: "Inspect CAC-to-intake manifold connections. Check CAC end tanks and pipe clamps.",
-            4: "Inspect exhaust manifold gaskets and V-band clamps. Check turbocharger turbine housing bolts.",
-            5: "Inspect DPF/SCR connections. Check DOC mounting bolts and exhaust pipe V-bands.",
-        }
+        action_map = self.profile.zones.action_map
 
         # ── Build response ────────────────────────────────────────────────
         ef_matrix = ef_data.get('energy_field', [[0]*6 for _ in range(6)])
@@ -316,7 +296,7 @@ class UnifiedPredictor:
             "timestamp": datetime.now().isoformat(),
             "leak_detected": bool(confirmed_leak),
             "confidence": round(float(confidence), 4),
-            "suspected_zone": ZONE_NAMES[zone_idx] if confirmed_leak else ZONE_NAMES[0],
+            "suspected_zone": self.profile.zones.zone_names[zone_idx] if confirmed_leak else self.profile.zones.zone_names[0],
             "suspected_zone_idx": int(zone_idx),
             "zone_probabilities": [round(float(p), 4) for p in zone_probs],
             "severity": severity,
@@ -373,7 +353,8 @@ async def health_check():
         "status": "healthy" if models_loaded else "degraded",
         "models_loaded": models_loaded,
         "version": "1.0.0",
-        "engine": "Cat C18",
+        "engine": predictor.profile.name if predictor else PROFILE.name,
+        "calibrated": predictor.profile.calibrated if predictor else PROFILE.calibrated,
     }
 
 
@@ -462,8 +443,9 @@ async def predict_audio(body: AudioPredictRequest):
         raise HTTPException(404, "Audio file not found")
         
     try:
-        model_path = os.path.join(MODELS_DIR, "acoustic_model.joblib")
-        scaler_path = os.path.join(MODELS_DIR, "acoustic_scaler.joblib")
+        # Acoustic model is engine-independent (audio features, not engine physics) — shared root, not per-engine.
+        model_path = os.path.join(BACKEND_DIR, "models", "acoustic_model.joblib")
+        scaler_path = os.path.join(BACKEND_DIR, "models", "acoustic_scaler.joblib")
         
         if not os.path.exists(model_path) or not os.path.exists(scaler_path):
             raise HTTPException(503, "Acoustic model/scaler not found. Please train first.")
@@ -504,7 +486,69 @@ async def predict_audio(body: AudioPredictRequest):
 @app.get("/api/zones")
 async def get_zones():
     """Get zone definitions."""
-    return {"zones": ZONE_NAMES}
+    return {"zones": predictor.profile.zones.zone_names if predictor else PROFILE.zones.zone_names}
+
+
+@app.get("/api/engines")
+async def list_engines():
+    """List every calibrated engine profile and whether it has trained models ready to serve."""
+    engines = []
+    for engine_id in list_profile_ids():
+        try:
+            profile = load_profile(engine_id)
+        except Exception as e:
+            print(f"  [WARN] Failed to load profile '{engine_id}': {e}")
+            continue
+        models_dir = os.path.join(BACKEND_DIR, "models", profile.artifact_dir)
+        trained = os.path.exists(os.path.join(models_dir, "leak_net.pth"))
+        engines.append({
+            "id": engine_id,
+            "name": profile.name,
+            "description": profile.description,
+            "calibrated": profile.calibrated,
+            "trained": trained,
+            "n_zones": profile.zones.n_zones,
+            "active": predictor is not None and predictor.profile.artifact_dir == profile.artifact_dir,
+        })
+    return {"engines": engines}
+
+
+@app.post("/api/engine/select")
+async def select_engine(data: Dict):
+    """
+    Switch the active engine. Reloads the global predictor with the chosen
+    profile's trained models and clears prediction history/anti-flicker
+    state — those are tied to the previous engine's confidence scale and
+    would be meaningless mixed with the new one.
+    """
+    global predictor
+    engine_id = data.get("engine")
+    if not engine_id:
+        raise HTTPException(400, "Missing 'engine' field")
+    if engine_id not in list_profile_ids():
+        raise HTTPException(404, f"Unknown engine '{engine_id}'. Available: {list_profile_ids()}")
+
+    profile = load_profile(engine_id)
+    models_dir = os.path.join(BACKEND_DIR, "models", profile.artifact_dir)
+    if not os.path.exists(os.path.join(models_dir, "leak_net.pth")):
+        raise HTTPException(
+            409, f"Engine '{engine_id}' has no trained models yet — run "
+                 f"'LEAKSENSE_ENGINE={engine_id} python ml/train.py' first."
+        )
+
+    predictor = UnifiedPredictor(profile)
+    app.state.predictor = predictor
+    prediction_history.clear()
+    print(f"[ENGINE SWITCH] Now serving: {profile.name}")
+
+    return {
+        "success": True,
+        "engine": profile.name,
+        "engine_id": engine_id,
+        "n_zones": profile.zones.n_zones,
+        "zones": profile.zones.zone_names,
+        "calibrated": profile.calibrated,
+    }
 
 
 @app.post("/api/simulate")
@@ -571,7 +615,7 @@ async def websocket_demo(ws: WebSocket):
             zone = 0
             severity = 0
             if 30 <= (cycle % 50) < 40:
-                zone = (cycle // 50 % 5) + 1
+                zone = (cycle // 50 % predictor.profile.zones.n_zones) + 1
                 severity = (cycle // 150 % 3) + 1
 
             sample = generate_healthy_sample(rpm + np.random.uniform(-20, 20))
