@@ -108,7 +108,7 @@ function Sidebar({ activePage, setActivePage, isConnected, engineName, onSwitchE
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">L</div>
           <div>
-            <h1>LeakSense Twin</h1>
+            <h1>EngineIQ</h1>
             <span>{engineName || 'Engine Diagnostics'}</span>
           </div>
         </div>
@@ -1166,7 +1166,7 @@ function App() {
         {activePage === 'digital-twin' && (
           <div className="dashboard-grid" style={{ height: '80vh', padding: '0', gridTemplateColumns: '1fr' }}>
             <iframe 
-              src="/LeakSense_v5_Fixed.html" 
+              src="/EngineIQ_v5_Fixed.html" 
               style={{ width: '100%', height: '100%', minHeight: '800px', border: 'none', borderRadius: '12px' }}
               title="Digital Twin"
             />

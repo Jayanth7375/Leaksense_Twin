@@ -9,8 +9,8 @@ const QUICK_QUERIES = [
   { label: 'Zone 2 Leak Count', query: 'COUNTX(FILTER(LeakEvents,[zone] LIKE \'Zone 2%\'),1)' },
   { label: 'Top 10 Boost Drops', query: 'TOPN(10,SensorReadings,([map_boost]-218)/218,ASC)' },
   { label: 'Peak EF Deviation', query: 'MAXX(TwinResiduals,[ef_deviation])' },
-  { label: 'Dataset: Avg RPM', query: 'AVERAGEX(LeakSense_Twin_Dataset, [RPM])' },
-  { label: 'Dataset: Leak Zones', query: 'SELECT Leak_Zone, COUNT(*) FROM LeakSense_Twin_Dataset GROUP BY Leak_Zone' },
+  { label: 'Dataset: Avg RPM', query: 'AVERAGEX(EngineIQ_Twin_Dataset, [RPM])' },
+  { label: 'Dataset: Leak Zones', query: 'SELECT Leak_Zone, COUNT(*) FROM EngineIQ_Twin_Dataset GROUP BY Leak_Zone' },
 ];
 
 export default function DAXConsole() {

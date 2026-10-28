@@ -6,7 +6,7 @@ export default function ChatBot() {
   const [isOpen, setIsOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [chatHistory, setChatHistory] = useState([
-    { role: 'assistant', content: 'Hello! I am your LeakSense AI Advisor. How can I help you with your Cat C18 diagnostics today?' }
+    { role: 'assistant', content: 'Hello! I am your EngineIQ AI Advisor. How can I help you with your Cat C18 diagnostics today?' }
   ])
   const [isLoading, setIsLoading] = useState(false)
   const scrollRef = useRef(null)
@@ -59,7 +59,7 @@ export default function ChatBot() {
             <div className="chatbot-icon">🤖</div>
             <div>
               <h3>AI Advisor</h3>
-              <p>LeakSense Twin Logic</p>
+              <p>EngineIQ Logic</p>
             </div>
           </div>
           <div className="chatbot-status">
